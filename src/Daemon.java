@@ -12,6 +12,7 @@ public class Daemon {
     static int joinPortNumber;
     static int packetPortNumber;
     static int filePortNumber;
+    static int graphPortNumber;
     static final List<String> neighbors = new ArrayList<>();
     static final Map<String, long[]> membershipList = new HashMap<>();
     static final TreeMap<Integer, String> hashValues = new TreeMap<>();
@@ -38,6 +39,7 @@ public class Daemon {
             joinPortNumber = Integer.parseInt(config.getProperty("joinPortNumber"));
             packetPortNumber = Integer.parseInt(config.getProperty("packetPortNumber"));
             filePortNumber = Integer.parseInt(config.getProperty("filePortNumber"));
+            graphPortNumber = Integer.parseInt(config.getProperty("graphPortNumber"));
             String logPath = config.getProperty("logPath");
 
             // output the configuration setting for double confirmation
@@ -61,7 +63,7 @@ public class Daemon {
             fileOutput = new PrintWriter(new BufferedWriter(new FileWriter(logPath + "result.log")));
 
         } catch (Exception e) {
-            //e.printStackTrace();
+            e.printStackTrace();
         }
     }
 
@@ -86,7 +88,7 @@ public class Daemon {
                         try {
                             neighbors.add(hashValues.get(currentHash));
                         } catch (Exception e) {
-                            //e.printStackTrace();
+                            e.printStackTrace();
                         }
                     }
                 }
@@ -102,7 +104,7 @@ public class Daemon {
                         try {
                             neighbors.add(hashValues.get(currentHash));
                         } catch (Exception e) {
-                            //e.printStackTrace();
+                            e.printStackTrace();
                         }
                     }
                 }
@@ -174,7 +176,7 @@ public class Daemon {
                     }
 
                 } catch (Exception e) {
-                    //e.printStackTrace();
+                    e.printStackTrace();
                 }
             }
         } else {
@@ -207,14 +209,14 @@ public class Daemon {
                                 threads.get(threads.size() - 1).start();
                             }
                         } catch (Exception e) {
-                            //e.printStackTrace();
+                            e.printStackTrace();
                         }
                     }
                     for (Thread t : threads) {
                         try {
                             t.join();
                         } catch (Exception e) {
-                            //e.printStackTrace();
+                            e.printStackTrace();
                         }
                     }
                 } else {
@@ -254,7 +256,7 @@ public class Daemon {
             try {
                 clientSocket = new DatagramSocket();
             } catch (Exception e) {
-                //e.printStackTrace();
+                e.printStackTrace();
             }
         }
 
@@ -267,7 +269,7 @@ public class Daemon {
                 DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, joinPortNumber);
                 clientSocket.send(sendPacket);
             } catch (Exception e) {
-                //e.printStackTrace();
+                e.printStackTrace();
             }
         }
 
@@ -313,7 +315,7 @@ public class Daemon {
             }
 
         } catch (Exception e) {
-            //e.printStackTrace();
+            e.printStackTrace();
         }
     }
 
@@ -454,7 +456,7 @@ public class Daemon {
             }
 
         } catch (Exception e) {
-            //e.printStackTrace();
+            e.printStackTrace();
         }
     }
 }

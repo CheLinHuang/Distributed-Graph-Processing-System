@@ -1,9 +1,15 @@
 import java.io.*;
 import java.net.Socket;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 public class FilesOP {
+
+    public static void main(String[] args) {
+        for (Map.Entry<Integer, Vertex> e : readFiles(new File("com-amazon.ungraph.txt")).entrySet()) {
+            System.out.println(e.getKey());
+            System.out.println(e.getValue());
+        }
+    }
 
     // Return all the files within given directory (includes sub-directory)
     public static List<String> listFiles(String dirName) {
@@ -28,6 +34,37 @@ public class FilesOP {
                 }
             }
         }
+    }
+
+    public static HashMap<Integer, Vertex> readFiles(File file) {
+        HashMap<Integer, Vertex> graph = new HashMap<>();
+        try (
+                BufferedReader buffer = new BufferedReader(new FileReader(file))
+        ) {
+            String line;
+            while ((line = buffer.readLine()) != null) {
+                if (line.startsWith("#"))
+                    continue;
+                String[] vertex = line.split("\t");
+                int vertex1 = Integer.parseInt(vertex[0]);
+                int vertex2 = Integer.parseInt(vertex[1]);
+                Vertex v = graph.getOrDefault(vertex1, new Vertex(vertex1));
+                v.neighbors.add(vertex2);
+                if (!graph.containsKey(vertex1)) {
+                    graph.put(vertex1, v);
+                }
+
+                // If undirected graph
+//                list = graph.getOrDefault(vertex2, new ArrayList<>());
+//                list.add(vertex1);
+//                if (!graph.containsKey(vertex2)) {
+//                    graph.put(vertex2, list);
+//                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return graph;
     }
 
     // Delete the given file
@@ -75,7 +112,7 @@ public class FilesOP {
                     System.out.println("Put the file successfully");
                 }
             } catch (Exception e) {
-                //e.printStackTrace();
+                e.printStackTrace();
             }
         }
     }

@@ -15,7 +15,7 @@ public class IntroducerThread extends Thread {
             try {
                 introducerSocket = new DatagramSocket(Daemon.joinPortNumber);
             } catch (Exception e) {
-                //e.printStackTrace();
+                e.printStackTrace();
             }
         }
 
@@ -68,7 +68,7 @@ public class IntroducerThread extends Thread {
                 Daemon.writeLog("ADD", joinID);
 
             } catch (Exception e) {
-                //e.printStackTrace();
+                e.printStackTrace();
             }
         }
     }

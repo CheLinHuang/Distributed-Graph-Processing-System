@@ -236,7 +236,7 @@ public class FileServerThread extends Thread {
                             }
 
                         } catch (Exception e) {
-                            //e.printStackTrace();
+                            e.printStackTrace();
                         }
                     }
                     if (queryResult.isEmpty()) {
@@ -279,7 +279,7 @@ public class FileServerThread extends Thread {
             }
 
         } catch (Exception e) {
-            //e.printStackTrace();
+            e.printStackTrace();
         } finally {
             if (FileServer.lock.isHeldByCurrentThread())
                 FileServer.lock.unlock();

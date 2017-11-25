@@ -29,7 +29,7 @@ public class Protocol {
                         InetAddress.getByName(target), Daemon.packetPortNumber);
                 sendSocket.send(sendPacket);
             } catch (Exception e) {
-                //e.printStackTrace();
+                e.printStackTrace();
             }
         }
     }
@@ -49,7 +49,7 @@ public class Protocol {
             }
 
         } catch (Exception e) {
-            //e.printStackTrace();
+            e.printStackTrace();
         }
     }
 }

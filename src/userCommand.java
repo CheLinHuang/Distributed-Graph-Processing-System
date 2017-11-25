@@ -49,7 +49,7 @@ public class userCommand {
                         try {
                             Thread.sleep(200);
                         } catch (Exception e) {
-                            //e.printStackTrace();
+                            e.printStackTrace();
                         }
                     }
 
@@ -91,7 +91,7 @@ public class userCommand {
                 Daemon.writeLog("put complete", tgtFileName);
                 socket.close();
             } catch (Exception e) {
-                //e.printStackTrace();
+                e.printStackTrace();
             }
         }
     }
@@ -133,7 +133,7 @@ public class userCommand {
             }
             socket.close();
         } catch (Exception e) {
-            //e.printStackTrace();
+            e.printStackTrace();
         }
     }
 
@@ -182,7 +182,7 @@ public class userCommand {
 
             socket.close();
         } catch (Exception e) {
-            //e.printStackTrace();
+            e.printStackTrace();
         }
     }
 
@@ -205,7 +205,7 @@ public class userCommand {
             System.out.println("delete the file successfully");
             socket.close();
         } catch (Exception e) {
-            //e.printStackTrace();
+            e.printStackTrace();
         }
     }
 }

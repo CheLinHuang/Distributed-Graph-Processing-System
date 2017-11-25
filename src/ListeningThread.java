@@ -13,7 +13,7 @@ public class ListeningThread extends Thread {
             sendSocket = new DatagramSocket();
 
         } catch (SocketException e){
-            //e.printStackTrace();
+            e.printStackTrace();
             System.exit(1);
         }
     }
@@ -112,7 +112,7 @@ public class ListeningThread extends Thread {
                 }
             }
         } catch (Exception e) {
-            //e.printStackTrace();
+            e.printStackTrace();
         }
     }
 }

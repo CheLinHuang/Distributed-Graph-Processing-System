@@ -14,7 +14,7 @@ public class MonitorThread extends Thread {
             try {
                 monitorSocket = new DatagramSocket();
             } catch (Exception e) {
-                //e.printStackTrace();
+                e.printStackTrace();
             }
         }
 
@@ -24,7 +24,7 @@ public class MonitorThread extends Thread {
             try {
                 Thread.sleep(500);
             } catch (Exception e) {
-                //e.printStackTrace();
+                e.printStackTrace();
             }
 
             boolean update = false;

@@ -19,7 +19,7 @@ public class HeartbeatThread extends Thread {
         try {
             sendSocket = new DatagramSocket();
         } catch (Exception e) {
-            //e.printStackTrace();
+            e.printStackTrace();
             System.exit(1);
         }
 
@@ -35,7 +35,7 @@ public class HeartbeatThread extends Thread {
                 }
 
             } catch (Exception e) {
-                //e.printStackTrace();
+                e.printStackTrace();
             }
         }
     }

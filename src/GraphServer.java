@@ -7,11 +7,13 @@ public class GraphServer {
     static HashMap<Integer, Vertex> graph;
     static HashMap<Integer, List<Double>> incoming;
     static HashMap<Integer, String> partition;
-    static HashMap<String, List<Vertex>> outgoing;
+    static HashMap<String, HashMap<Integer, List<Double>>> outgoing;
     static int gatherCount = 0;
     static int vms;
-    static int iterations = 0;
     static boolean iterationDone = false;
+    static boolean isFinish = false;
+    static boolean isInitialized = false;
+    static boolean needResend = false;
     static boolean isPageRank;
     static double damping;
     static int N;

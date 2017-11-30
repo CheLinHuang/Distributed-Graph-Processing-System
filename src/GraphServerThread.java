@@ -1,5 +1,6 @@
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -23,6 +24,9 @@ public class GraphServerThread extends Thread {
                 ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
                 ObjectInputStream in = new ObjectInputStream(socket.getInputStream())
         ) {
+
+            String localHost = InetAddress.getLocalHost().getHostName();
+
             while (true) {
 
                 operation = in.readUTF();
@@ -36,7 +40,7 @@ public class GraphServerThread extends Thread {
                         GraphServer.graph.put(v.ID, v);
                         GraphServer.incoming.put(v.ID, new ArrayList<>());
 
-                        System.out.println("Add vertex " + v.ID);
+                        System.out.println("Add vertex " + v.toString());
 
                         break;
                     }
@@ -45,19 +49,26 @@ public class GraphServerThread extends Thread {
                         GraphServer.partition = new HashMap<>();
                         GraphServer.outgoing = new HashMap<>();
 
+                        System.out.println("get neighbor");
+
                         // build partition information
                         GraphServer.partition = (HashMap<Integer, String>) in.readObject();
                         for (int i : GraphServer.partition.keySet()) {
-                            GraphServer.partition.put(i, GraphServer.partition.get(i).split("#")[1]);
+                            String host = GraphServer.partition.get(i).split("#")[1];
+                            GraphServer.partition.put(i, host);
+                            System.out.println(i + " " + host);
                         }
-                        System.out.println("get neighbor");
+
+
                         // build outgoing list
                         for (String s : GraphServer.partition.values()) {
                             if (!GraphServer.outgoing.containsKey(s)) {
                                 GraphServer.outgoing.put(s, new HashMap<>());
                             }
                         }
+                        GraphServer.outgoing.remove(localHost);
                         GraphServer.vms = GraphServer.outgoing.size();
+                        System.out.println("Neighbor vms " + GraphServer.vms);
 
                         push();
                         while (GraphServer.gatherCount != GraphServer.vms) {
@@ -182,6 +193,9 @@ public class GraphServerThread extends Thread {
                     case "put": {
 
                         HashMap<Integer, List<Double>> e = (HashMap<Integer, List<Double>>) in.readObject();
+
+                        System.out.println("GraphServer.iterationDone :" + GraphServer.iterationDone);
+
                         while (!GraphServer.iterationDone) {
                         }
                         for (Map.Entry<Integer, List<Double>> entry : e.entrySet()) {
@@ -259,7 +273,7 @@ public class GraphServerThread extends Thread {
         for (String s : GraphServer.outgoing.keySet()) {
             GraphServer.outgoing.get(s).clear();
         }
-
+        System.out.println("Pushing");
         while (putCount[0] != GraphServer.vms) {
         }
     }

@@ -451,11 +451,12 @@ public class MasterThread extends Thread {
                                         workerOuts.clear();
                                         workerIns.clear();
                                         map.clear();
+                                        reversedMap.clear();
 
                                         String[] workers = Master.workers.split("_");
                                         for (int i = 0; i < workers.length; i++) {
                                             String worker = workers[i];
-                                            System.out.println(worker);
+                                            //System.out.println(worker);
                                             Socket skt = new Socket(worker.split("#")[1], Daemon.graphPortNumber);
                                             workerSkts.add(skt);
                                             workerOuts.add(new ObjectOutputStream(skt.getOutputStream()));
@@ -514,10 +515,18 @@ public class MasterThread extends Thread {
                                 }
 
                                 int haltCount = 0;
+                                for (int i = 0; i < workerIns.size(); i++) {
+                                    String res = workerIns.get(i).readUTF();
+                                    System.out.println(reversedMap.get(i) + ": " + res);
+                                    if (res.equals("HATL"))
+                                        haltCount++;
+                                }
+                                /*
                                 for (ObjectInputStream in: workerIns) {
                                     if (in.readUTF().equals("HALT"))
                                         haltCount ++;
-                                }
+                                }*/
+
                                 Master.iteration ++;
                                 // if all workers vote to halt or reaches the iteration upper limit
                                 // terminate the task and store the results in the SDFS
@@ -526,6 +535,7 @@ public class MasterThread extends Thread {
 
                                     for (ObjectOutputStream out: workerOuts) {
                                         out.writeUTF("TERMINATE");
+                                        out.flush();
                                     }
 
                                     List<String> results = new ArrayList<>();
@@ -540,6 +550,9 @@ public class MasterThread extends Thread {
                                         }
                                     }
                                     Collections.sort(results);
+                                    for (String s: results)
+                                        System.out.println(s);
+                                    /*
                                     // save the file into the SDFS
                                     String outputFileName = Master.taskInfo.get(4);
                                     List<String> outTgtNodes =
@@ -561,7 +574,7 @@ public class MasterThread extends Thread {
                                         out.writeUTF("PUT REPLICA");
                                         out.writeUTF(outputFileName);
                                         out.writeUTF("KEEP");
-                                    }
+                                    }*/
                                     // leave the while loop
                                     break;
                                 }
@@ -580,6 +593,7 @@ public class MasterThread extends Thread {
                         }
                     }
                 }
+                System.out.println(Master.jobQueue.peek() + " completed!");
                 // release the resources occupied by this thread
                 Master.jobQueue.poll();
                 for (Socket skt : replicaSockets) {

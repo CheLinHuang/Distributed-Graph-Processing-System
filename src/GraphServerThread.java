@@ -30,7 +30,7 @@ public class GraphServerThread extends Thread {
             while (true) {
 
                 operation = in.readUTF();
-                System.out.println(operation);
+                //System.out.println(operation);
 
                 switch (operation) {
                     case "ADD": {
@@ -40,7 +40,7 @@ public class GraphServerThread extends Thread {
                         GraphServer.graph.put(v.ID, v);
                         GraphServer.incoming.put(v.ID, new ArrayList<>());
 
-                        System.out.println("Add vertex " + v.toString());
+                        //System.out.println("Add vertex " + v.toString());
 
                         break;
                     }
@@ -56,9 +56,7 @@ public class GraphServerThread extends Thread {
                         for (int i : GraphServer.partition.keySet()) {
                             String host = GraphServer.partition.get(i).split("#")[1];
                             GraphServer.partition.put(i, host);
-                            System.out.println(i + " " + host);
                         }
-
 
                         // build outgoing list
                         for (String s : GraphServer.partition.values()) {
@@ -72,6 +70,11 @@ public class GraphServerThread extends Thread {
 
                         push();
                         while (GraphServer.gatherCount != GraphServer.vms) {
+                            try {
+                                Thread.sleep(10);
+                            } catch (Exception e) {
+
+                            }
                         }
 
                         GraphServer.isInitialized = true;
@@ -84,7 +87,7 @@ public class GraphServerThread extends Thread {
 
                         // build local graph
                         int id = in.readInt();
-                        System.out.println("Delete vertex " + id);
+                        //System.out.println("Delete vertex " + id);
                         out.writeObject(GraphServer.graph.get(id));
                         if (in.readUTF().equals("DONE")) {
                             GraphServer.graph.remove(id);
@@ -146,10 +149,10 @@ public class GraphServerThread extends Thread {
                         synchronized (GraphServer.incoming) {
                             if (GraphServer.isPageRank) {
                                 for (int i : GraphServer.graph.keySet()) {
-                                    System.out.println("calculate id: " + i);
+                                    //System.out.println("calculate id: " + i);
                                     double pr = (1 - GraphServer.damping);
                                     for (double value : GraphServer.incoming.get(i)) {
-                                        System.out.println("income value " + value);
+                                        //System.out.println("income value " + value);
                                         pr += value * GraphServer.damping;
                                     }
                                     if (GraphServer.isFinish && Math.abs(GraphServer.graph.get(i).value - pr) > GraphServer.threshold)
@@ -183,11 +186,10 @@ public class GraphServerThread extends Thread {
                         // gather
                         while (GraphServer.gatherCount < GraphServer.vms) {
                             try {
-                                Thread.sleep(500);
+                                Thread.sleep(1);
                             } catch (Exception e) {
 
                             }
-                            System.out.println("line183");
                         }
 
                         System.out.println("iteration done");
@@ -206,27 +208,26 @@ public class GraphServerThread extends Thread {
                         HashMap<Integer, List<Double>> e = (HashMap<Integer, List<Double>>) in.readObject();
                         out.writeUTF("done");
                         out.flush();
-                        System.out.println("get hashmap size " + e.size());
-                        System.out.println("GraphServer.iterationDone :" + GraphServer.iterationDone);
+                        //System.out.println("get hashmap size " + e.size());
+                        //System.out.println("GraphServer.iterationDone :" + GraphServer.iterationDone);
 
                         while (!GraphServer.iterationDone) {
                             try {
-                                Thread.sleep(500);
+                                Thread.sleep(10);
                             } catch (Exception ee) {
 
                             }
-                            System.out.println("line204");
                         }
                         for (Map.Entry<Integer, List<Double>> entry : e.entrySet()) {
-                            System.out.println("Inserting value" + entry.getKey());
-                            for (double d : entry.getValue())
-                                System.out.print(d + " ");
-                            System.out.println();
+//                            System.out.println("Inserting value" + entry.getKey());
+//                            for (double d : entry.getValue())
+//                                System.out.print(d + " ");
+//                            System.out.println();
                             GraphServer.incoming.get(entry.getKey()).addAll(entry.getValue());
                         }
                         GraphServer.gatherCount++;
 
-                        System.out.println("GraphServer.gatherCount :" + GraphServer.gatherCount);
+                        //System.out.println("GraphServer.gatherCount :" + GraphServer.gatherCount);
 
                         return;
                     }
@@ -283,10 +284,6 @@ public class GraphServerThread extends Thread {
                     } else {
                         list.add(v.value);
                     }
-                    System.out.println("out going value " + i);
-                    for (double d : list)
-                        System.out.print(d + " ");
-                    System.out.println();
                     if (!GraphServer.outgoing.get(GraphServer.partition.get(i)).containsKey(i))
                         GraphServer.outgoing.get(GraphServer.partition.get(i)).put(i, list);
                 }
@@ -302,11 +299,10 @@ public class GraphServerThread extends Thread {
 
         while (putCount[0] != GraphServer.vms) {
             try {
-                Thread.sleep(500);
+                Thread.sleep(1);
             } catch (Exception e) {
 
             }
-            System.out.println("line287");
         }
 
         // clear outgoing info
@@ -334,7 +330,6 @@ public class GraphServerThread extends Thread {
             ) {
                 out.writeUTF("put");
                 out.flush();
-                System.out.println("put hashmap size " + map.size());
                 out.writeObject(map);
                 in.readUTF();
 

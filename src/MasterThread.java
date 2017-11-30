@@ -261,6 +261,7 @@ public class MasterThread extends Thread {
 
                     case "SAVA": {
 
+                        long tic = System.currentTimeMillis();
                         for (DataOutputStream out : replicaOutputStreams) {
                             out.writeUTF("PUT REPLICA");
                             out.writeUTF(sdfsfilename);
@@ -374,10 +375,9 @@ public class MasterThread extends Thread {
 
                         Master.graph = graph;
                         // graph transmission completed
-                        System.out.println("Graph");
+
                         // synchronize the received graph between master and backup masters
                         List<String> backupMasters = MasterThreadHelper.getBackupMasters();
-
                         List<Socket> backupSockets = new ArrayList<>();
                         List<ObjectOutputStream> backupOuts = new ArrayList<>();
                         List<ObjectInputStream> backupIns = new ArrayList<>();
@@ -412,6 +412,9 @@ public class MasterThread extends Thread {
                                 new long[]{fileTimeStamp, System.currentTimeMillis()});
                         Master.fileReplica.put(sdfsfilename,
                                 targetNodes);
+                        long toc = System.currentTimeMillis();
+                        System.out.println(
+                                "Processing time for graph parsing: " + (toc - tic) / 1000. + "(sec)");
 
                         List<Socket> workerSkts = new ArrayList<>();
                         List<ObjectOutputStream> workerOuts = new ArrayList<>();
@@ -426,8 +429,8 @@ public class MasterThread extends Thread {
                             isIteration = true;
                             numOfIteration = Integer.parseInt(terminateCondition);
                         }
-                        System.out.println(Master.graph.toString());
 
+                        tic = System.currentTimeMillis();
                         // start to do iterations for graph computing
                         while (true) {
 
@@ -469,6 +472,7 @@ public class MasterThread extends Thread {
                                             out.flush();
                                             out.writeInt((isIteration? 0: 1) +
                                                     (Master.taskInfo.get(1).equals("pagerank")? 1: 0));
+                                            out.flush();
                                             // send the damping factor to workers
                                             if(Master.taskInfo.get(1).equals("pagerank")) {
                                                 out.writeDouble(Double.parseDouble(Master.taskInfo.get(2)));
@@ -516,24 +520,14 @@ public class MasterThread extends Thread {
                                 }
 
                                 int haltCount = 0;
-                                for (int i = 0; i < workerIns.size(); i++) {
-                                    String res = workerIns.get(i).readUTF();
-                                    System.out.println(reversedMap.get(i) + ": " + res);
-                                    if (res.equals("HALT"))
-                                        haltCount++;
-                                }
-                                /*
                                 for (ObjectInputStream in: workerIns) {
                                     if (in.readUTF().equals("HALT"))
                                         haltCount ++;
-                                }*/
+                                }
 
                                 Master.iteration ++;
                                 // if all workers vote to halt or reaches the iteration upper limit
                                 // terminate the task and store the results in the SDFS
-                                System.out.println("isIteration" + isIteration);
-                                System.out.println("haltCount" + haltCount);
-                                System.out.println("workerIns.size()" + workerIns.size());
 
                                 if ((!isIteration && haltCount == workerIns.size())
                                         || (isIteration && Master.iteration == numOfIteration)) {
@@ -554,7 +548,14 @@ public class MasterThread extends Thread {
                                             results.add(vertexID + "," + f.format("%.5f", vertexValue));
                                         }
                                     }
-                                    Collections.sort(results);
+                                    Collections.sort(results, new Comparator<String>() {
+                                        @Override
+                                        public int compare(String o1, String o2) {
+                                            o1 = o1.split(",")[1];
+                                            o2 = o2.split(",")[1];
+                                            return o2.compareTo(o1);
+                                        }
+                                    });
 
                                     // save the results in the SDFS
                                     MasterThreadHelper.saveResults(results, Master.taskInfo.get(4));
@@ -581,6 +582,9 @@ public class MasterThread extends Thread {
                                 }
                             }
                         }
+                        toc = System.currentTimeMillis();
+                        System.out.println(
+                                "Processing time for graph computing: " + (toc - tic) / 1000. + "(sec)");
                     }
                 }
                 System.out.println(Master.jobQueue.peek() + " completed!");

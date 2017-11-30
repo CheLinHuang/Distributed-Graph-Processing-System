@@ -1,4 +1,0 @@
-put ../pregel_paper.pdf paper.pdf
-put ../pregel_paper.pdf QQJ.pdf
-put ../pregel_paper.pdf QQ.pdf
-sava pagerank 0.85 0.0001 followers.txt test.txt

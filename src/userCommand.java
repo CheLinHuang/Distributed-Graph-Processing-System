@@ -275,11 +275,19 @@ public class userCommand {
         }
 
         String localGraphFile = cmdParts[cmdParts.length - 2];
+
         File file = new File(localGraphFile);
         if (!file.exists()) {
             System.out.println("Local file not exist!");
             return;
         }
+
+        if (localGraphFile.indexOf("/") != -1) {
+            String[] temp = localGraphFile.split("/");
+            localGraphFile = temp[temp.length - 1];
+            System.out.println(localGraphFile);
+        }
+        
         // input is valid, starts to put the graph into the SDFS
         String outputFile = cmdParts[cmdParts.length - 1];
         params.add(outputFile);

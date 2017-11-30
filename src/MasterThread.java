@@ -349,6 +349,10 @@ public class MasterThread extends Thread {
                                     else v = graph.get(src);
                                     v.addNeighbor(dest);
                                     graph.put(src, v);
+                                    if (!graph.containsKey(dest)) {
+                                        v = new Vertex(dest, Double.MAX_VALUE);
+                                        graph.put(dest, v);
+                                    }
                                 }
                                 prevIdx = idx;
                             }

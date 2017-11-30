@@ -2,7 +2,7 @@ import java.net.ServerSocket;
 import java.util.HashMap;
 import java.util.List;
 
-public class GraphServer {
+public class GraphServer extends Thread {
 
     static HashMap<Integer, Vertex> graph;
     static HashMap<Integer, List<Double>> incoming;
@@ -19,19 +19,19 @@ public class GraphServer {
     static double threshold;
     static int N;
 
-    public static void main(String[] args) {
-    //public void run() {
+    //public static void main(String[] args) {
+    public void run() {
         boolean listening = true;
 
         // Keep listening for incoming file related request
-        try (ServerSocket serverSocket = new ServerSocket(12345)) {
+        try (ServerSocket serverSocket = new ServerSocket(Daemon.graphPortNumber)) {
 
             // Accept socket connection and create new thread
             while (listening)
                 new GraphServerThread(serverSocket.accept()).start();
 
         } catch (Exception e) {
-            System.err.println("Could not listen to port " + 12345);
+            System.err.println("Could not listen to port " + Daemon.graphPortNumber);
             System.exit(-1);
         }
     }

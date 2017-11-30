@@ -370,7 +370,7 @@ public class MasterThread extends Thread {
 
                         Master.graph = graph;
                         // graph transmission completed
-
+                        System.out.println("Graph");
                         // synchronize the received graph between master and backup masters
                         List<String> backupMasters = MasterThreadHelper.getBackupMasters();
 
@@ -422,6 +422,7 @@ public class MasterThread extends Thread {
                             isIteration = true;
                             numOfIteration = Integer.parseInt(terminateCondition);
                         }
+                        System.out.println(Master.graph.toString());
 
                         // start to do iterations for graph computing
                         while (true) {
@@ -435,6 +436,7 @@ public class MasterThread extends Thread {
                             // 1: at least one worker rejoins
                             // 2: worker list unchanged
                             int status = MasterThreadHelper.checkWorker(Master.taskInfo.get(0));
+                            System.out.println(status);
                             try {
                                 // initialize the graph and do partition
                                 switch (status) {
@@ -449,6 +451,7 @@ public class MasterThread extends Thread {
                                         String[] workers = Master.workers.split("_");
                                         for (int i = 0; i < workers.length; i++) {
                                             String worker = workers[i];
+                                            System.out.println(worker);
                                             Socket skt = new Socket(worker.split("#")[1], Daemon.graphPortNumber);
                                             workerSkts.add(skt);
                                             workerOuts.add(new ObjectOutputStream(skt.getOutputStream()));

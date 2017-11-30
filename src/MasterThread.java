@@ -519,7 +519,7 @@ public class MasterThread extends Thread {
                                 for (int i = 0; i < workerIns.size(); i++) {
                                     String res = workerIns.get(i).readUTF();
                                     System.out.println(reversedMap.get(i) + ": " + res);
-                                    if (res.equals("HATL"))
+                                    if (res.equals("HALT"))
                                         haltCount++;
                                 }
                                 /*
@@ -531,6 +531,10 @@ public class MasterThread extends Thread {
                                 Master.iteration ++;
                                 // if all workers vote to halt or reaches the iteration upper limit
                                 // terminate the task and store the results in the SDFS
+                                System.out.println("isIteration" + isIteration);
+                                System.out.println("haltCount" + haltCount);
+                                System.out.println("workerIns.size()" + workerIns.size());
+
                                 if ((!isIteration && haltCount == workerIns.size())
                                         || (isIteration && Master.iteration == numOfIteration)) {
 
@@ -576,6 +580,8 @@ public class MasterThread extends Thread {
                                         out.writeUTF(outputFileName);
                                         out.writeUTF("KEEP");
                                     }*/
+                                    // clear the graph
+                                    Master.clearGraphTask();
                                     // leave the while loop
                                     break;
                                 }

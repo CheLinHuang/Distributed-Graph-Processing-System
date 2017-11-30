@@ -8,10 +8,10 @@ import java.util.Random;
 
 public class Protocol {
 
-    public static void sendGossip(String ID, String action, long counter,
+    public static void sendGossip(String ID, String action, long counter, long nodeStatus,
                                   int TTL, int numOfTarget, DatagramSocket sendSocket) {
         // create the gossip message to send
-        byte[] sendData = ("1_" + ID + "_" + action + "_" + counter + "_" + TTL).getBytes();
+        byte[] sendData = ("1_" + ID + "_" + action + "_" + counter + "_" + nodeStatus + "_" + TTL).getBytes();
 
         // randomly choose min(numOfTarget, sizeOfMembershipList) elements
         // from the membership list to send gossip message
@@ -22,30 +22,39 @@ public class Protocol {
         }
         Collections.shuffle(targets);
         Object[] IDArray = Daemon.membershipList.keySet().toArray();
-        for (int i = 0; i < Math.min(IDArray.length, numOfTarget); i++) {
-            try {
-                String target = ((String) IDArray[targets.get(i)]).split("#")[1];
-                DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length,
-                        InetAddress.getByName(target), Daemon.packetPortNumber);
-                sendSocket.send(sendPacket);
-            } catch (Exception e) {
-                e.printStackTrace();
+        int count = 0;
+        int index = 0;
+        while (count < Math.min(numOfTarget, IDArray.length - 1)) {
+
+            String target = ((String) IDArray[targets.get(index++)]);
+            if (!target.equals(Daemon.ID)) {
+                target = target.split("#")[1];
+                count++;
+                try {
+                    DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length,
+                            InetAddress.getByName(target), Daemon.packetPortNumber);
+                    sendSocket.send(sendPacket);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         }
     }
 
-    public static void sendHeartBeat(String ID, long counter, DatagramSocket sendSocket) {
+    public static void sendHeartBeat(String ID, long counter, long nodeStatus, DatagramSocket sendSocket) {
         try {
             // create the heartbeat message to send
-            byte[] sendData = ("0_" + ID + "_" + counter).getBytes();
+            byte[] sendData = ("0_" + ID + "_" + counter + "_" + nodeStatus).getBytes();
 
             // send the heartbeat signal to all its neighbor
-            for (String neighbor : Daemon.neighbors) {
+            synchronized (Daemon.neighbors) {
+                for (String neighbor : Daemon.neighbors) {
 
-                DatagramPacket sendPacket =
-                        new DatagramPacket(sendData, sendData.length,
-                                InetAddress.getByName(neighbor.split("#")[1]), Daemon.packetPortNumber);
-                sendSocket.send(sendPacket);
+                    DatagramPacket sendPacket =
+                            new DatagramPacket(sendData, sendData.length,
+                                    InetAddress.getByName(neighbor.split("#")[1]), Daemon.packetPortNumber);
+                    sendSocket.send(sendPacket);
+                }
             }
 
         } catch (Exception e) {

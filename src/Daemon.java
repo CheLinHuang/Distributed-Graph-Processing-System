@@ -7,17 +7,25 @@ import java.util.concurrent.Executors;
 
 public class Daemon {
 
+    static final int MASTER = 2;
+    static final int WORKER = 1;
     static String ID;
     static Integer myHashValue;
     static int joinPortNumber;
     static int packetPortNumber;
     static int filePortNumber;
+    static int masterPortNumber;
     static int graphPortNumber;
     static final List<String> neighbors = new ArrayList<>();
+    // membership list is a map beteween node ID to <counter, timestamp>
     static final Map<String, long[]> membershipList = new HashMap<>();
+    static final Map<String, Integer> masterList = new HashMap<>();
+    static final Map<String, String> workerList = new HashMap<>();
+    // hashValues is a map between a string's hashvalue to the string
     static final TreeMap<Integer, String> hashValues = new TreeMap<>();
-    private static PrintWriter fileOutput;
-    private String[] hostNames;
+    static PrintWriter fileOutput;
+    static String[] hostNames;
+    static String master = "None";
     final static int bufferSize = 512;
     static boolean neighborUpdated = false;
 
@@ -39,6 +47,7 @@ public class Daemon {
             joinPortNumber = Integer.parseInt(config.getProperty("joinPortNumber"));
             packetPortNumber = Integer.parseInt(config.getProperty("packetPortNumber"));
             filePortNumber = Integer.parseInt(config.getProperty("filePortNumber"));
+            masterPortNumber = Integer.parseInt(config.getProperty("masterPortNumber"));
             graphPortNumber = Integer.parseInt(config.getProperty("graphPortNumber"));
             String logPath = config.getProperty("logPath");
 
@@ -61,260 +70,18 @@ public class Daemon {
             if (!outputDir.exists())
                 outputDir.mkdirs();
             fileOutput = new PrintWriter(new BufferedWriter(new FileWriter(logPath + "result.log")));
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    public static void updateNeighbors() {
-
-        synchronized (membershipList) {
-            synchronized (neighbors) {
-                List<String> oldNeighbors = new ArrayList<>(neighbors);
-
-                neighbors.clear();
-
-                Integer currentHash = myHashValue;
-                // get the predecessors
-                for (int i = 0; i < 2; i++) {
-                    currentHash = hashValues.lowerKey(currentHash);
-                    // since we are maintaining a virtual ring, if lower key is null,
-                    // it means that we are at the end of the list
-                    if (currentHash == null) {
-                        currentHash = hashValues.lastKey();
-                    }
-                    if (!currentHash.equals(myHashValue) && !neighbors.contains(hashValues.get(currentHash))) {
-                        try {
-                            neighbors.add(hashValues.get(currentHash));
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }
-                // get the successors
-                currentHash = myHashValue;
-                for (int i = 0; i < 2; i++) {
-                    currentHash = hashValues.higherKey(currentHash);
-                    if (currentHash == null) {
-                        currentHash = hashValues.firstKey();
-                    }
-
-                    if (!currentHash.equals(myHashValue) && !neighbors.contains(hashValues.get(currentHash))) {
-                        try {
-                            neighbors.add(hashValues.get(currentHash));
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }
-
-                // check if the neighbors are changed
-                // if yes, the files stored on this node might need to be moved
-                // to maintain the consistency of the Chord-like ring
-                neighborUpdated = false;
-                if (oldNeighbors.size() != neighbors.size()) {
-                    neighborUpdated = true;
-                } else {
-                    for (int i = 0; i < oldNeighbors.size(); i++) {
-                        if (!oldNeighbors.get(i).equals(neighbors.get(i))) {
-                            neighborUpdated = true;
-                            break;
-                        }
-                    }
-                }
-
-                // for debugging
-                /*
-                System.out.println("print neighbors......");
-                for (String neighbor : neighbors) {
-                    System.out.println(neighbor);
-                }*/
-
-                // Update timestamp for non-neighbor
-                for (String neighbor : neighbors) {
-                    long[] memberStatus = {membershipList.get(neighbor)[0], System.currentTimeMillis()};
-                    membershipList.put(neighbor, memberStatus);
-
-                }
-            }
-        }
-    }
-
-    public static void moveReplica(boolean isNewNode) {
-
-        if (isNewNode) {
-            // For newly-added node, it is possible that
-            int j = neighbors.size() - 1;
-            while (j >= Math.max(0, neighbors.size() - 2)) {
-                String tgtHostName = neighbors.get(j--).split("#")[1];
+            File sdfsDir = new File("../SDFS");
+            if (!sdfsDir.exists()) {
+                boolean result = false;
                 try {
-                    Socket socket = new Socket(tgtHostName, filePortNumber);
-                    DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-                    DataInputStream in = new DataInputStream(socket.getInputStream());
-
-                    out.writeUTF("get replica");
-                    out.writeUTF(ID);
-                    // still shows EOF exception
-                    String sdfsFileName;
-
-                    while (!(sdfsFileName = in.readUTF()).equals("Empty")) {
-
-                        BufferedOutputStream fileOutputStream = new BufferedOutputStream(
-                                new FileOutputStream("../SDFS/" + sdfsFileName));
-
-                        long fileSize = in.readLong();
-                        byte[] buffer = new byte[Daemon.bufferSize];
-                        int bytes;
-                        while (fileSize > 0 && (bytes = in.read(buffer, 0, (int) Math.min(Daemon.bufferSize, fileSize))) != -1) {
-                            fileOutputStream.write(buffer, 0, bytes);
-                            fileSize -= bytes;
-                        }
-                        fileOutputStream.close();
-                        out.writeUTF("Received");
-                        System.out.println("Re-replication: receive " + sdfsFileName + " from " + tgtHostName);
-                    }
-
-                } catch (Exception e) {
-                    e.printStackTrace();
+                    result = sdfsDir.mkdir();
+                } catch (SecurityException se) {
+                    System.out.println("Can't create the SDFS directory.");
                 }
-            }
-        } else {
-            // For old node, check if it needs to create new replications in its successors
-            List<String> fileList = FilesOP.listFiles("../SDFS/");
-
-            for (int i = 0; i < fileList.size(); i++) {
-                String file = fileList.get(i);
-                String targetID = Hash.getServer(Hash.hashing(file, 8));
-
-                if (targetID.equals(ID)) {
-                    System.out.println("Re-replication: send " + file + " to successors");
-                    // replicate the file to the two successors
-                    List<Thread> threads = new ArrayList<>();
-                    int j = neighbors.size() - 1;
-                    while (j >= Math.max(0, neighbors.size() - 2)) {
-                        String tgtHostName = neighbors.get(j--).split("#")[1];
-                        try {
-                            Socket socket = new Socket(tgtHostName, filePortNumber);
-                            DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-                            DataInputStream in = new DataInputStream(socket.getInputStream());
-                            out.writeUTF("fail replica");
-                            out.writeUTF(file);
-                            String returnMsg = in.readUTF();
-
-                            // for the case that the neighbor is also failed subsequently
-                            // returnMsg will be null
-                            if (returnMsg != null && returnMsg.equals("Ready to receive")) {
-                                threads.add(FilesOP.sendFile(new File("../SDFS/" + file), socket));
-                                threads.get(threads.size() - 1).start();
-                            }
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    }
-                    for (Thread t : threads) {
-                        try {
-                            t.join();
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    }
-                } else {
-                    // consider the case that a new node is added,
-                    // and the target node for this file is no longer in the predecessors of this node,
-                    // this means that this file is longer needed in this node
-                    int j = 0;
-                    boolean delete = true;
-                    while (j < Math.min(neighbors.size(), 2)) {
-                        if (neighbors.get(j).equals(targetID)) {
-                            delete = false;
-                            break;
-                        }
-                        j++;
-                    }
-                    if (delete) {
-                        if (FilesOP.deleteFile("../SDFS/" + file)) {
-                            System.out.println("Re-replication: delete " + file);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-
-    public void joinGroup(boolean isIntroducer) {
-
-        // As required, wipes all the files stored in the SDFS system on this node
-        for (String s : FilesOP.listFiles("../SDFS/"))
-            FilesOP.deleteFile("../SDFS/" + s);
-
-        DatagramSocket clientSocket = null;
-
-        // try until socket create correctly
-        while (clientSocket == null) {
-            try {
-                clientSocket = new DatagramSocket();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-
-        byte[] sendData = ID.getBytes();
-
-        // send join request to each introducer
-        for (String hostName : hostNames) {
-            try {
-                InetAddress IPAddress = InetAddress.getByName(hostName);
-                DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, joinPortNumber);
-                clientSocket.send(sendPacket);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-
-        byte[] receiveData = new byte[1024];
-        DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-
-        // wait for the server's response
-        try {
-            clientSocket.setSoTimeout(2000);
-            clientSocket.receive(receivePacket);
-            String response = new String(receivePacket.getData(), 0, receivePacket.getLength());
-
-            // process the membership list that the first introducer response and ignore the rest
-            String[] members = response.split("%");
-            for (String member : members) {
-                String[] memberDetail = member.split("/");
-                long[] memberStatus = {Long.parseLong(memberDetail[1]), System.currentTimeMillis()};
-                membershipList.put(memberDetail[0], memberStatus);
-                hashValues.put(Hash.hashing(memberDetail[0], 8), memberDetail[0]);
+                if (result) System.out.println("Directory created");
             }
 
-            writeLog("JOIN!", ID);
-            updateNeighbors();
-            // when the node is newly join the cluster,
-            // always execute moveReplica
-            moveReplica(true);
-
-        } catch (SocketTimeoutException e) {
-
-            if (!isIntroducer) {
-                System.err.println("All introducers are down!! Cannot join the group.");
-                System.exit(1);
-            } else {
-                // This node might be the first introducer,
-                // keep executing the rest of codes
-                System.out.println("You might be first introducer!");
-
-                // put the process itself to the membership list
-                long[] memberStatus = {0, System.currentTimeMillis()};
-                membershipList.put(ID, memberStatus);
-                hashValues.put(Hash.hashing(ID, 8), ID);
-                writeLog("JOIN", ID);
-            }
-
-        } catch (Exception e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }
@@ -331,45 +98,39 @@ public class Daemon {
         System.out.println("Enter \"delete sdfsfilename\" to delete the sdfsfile");
         System.out.println("Enter \"ls sdfsfilename\" to show all the nodes which store the file");
         System.out.println("Enter \"store\" to list all the sdfsfiles stored locally");
+        System.out.println("Enter \"sava task(pagerank/sssp) taskparam localgraphfile outputsdfsfilename");
         System.out.println("===============================");
-    }
-
-    public static void writeLog(String action, String nodeID) {
-
-        // write logs about action happened to the nodeID into log
-        fileOutput.println(LocalDateTime.now().toString() + " \"" + action + "\" " + nodeID);
-        /*if (!action.equals("FAILURE") || !action.equals("MESSAGE") || !action.equals("JOIN")) {
-            fileOutput.println("Updated Membership List:");
-            for (String key : membershipList.keySet()) {
-                fileOutput.println(key);
-            }
-            fileOutput.println("======================");
-        }*/
-        fileOutput.flush();
     }
 
     public static void main(String[] args) {
 
         boolean isIntroducer = false;
+        boolean isMaster = false;
         String configPath = null;
 
         // parse the input arguments
-        if (args.length == 0 || args.length > 2) {
-            System.err.println("Please enter the argument as the following format: <configFilePath> <-i>(optional)");
+        if (args.length == 0 || args.length > 3) {
+            System.err.println("Please enter the argument as the following format: <configFilePath> <-i> <-m>");
             System.exit(1);
         }
-        if (args.length == 1) {
-            configPath = args[0];
-        } else if (args.length == 2) {
-            configPath = args[0];
-            if (args[1].equals("-i")) {
-                isIntroducer = true;
-                System.out.println("Set this node as an introducer!");
-            } else {
-                System.err.println("Could not recognize the input argument");
-                System.err.println("Please enter the argument as the following format: <configFilePath> <-i>(optional)");
-                System.exit(1);
-            }
+
+        configPath = args[0];
+        args = Arrays.copyOfRange(args, 1, args.length);
+        StringBuilder builder = new StringBuilder();
+        for (String arg: args) builder.append(arg);
+        String setting = builder.toString();
+        if (setting.indexOf("-i") != -1) {
+            isIntroducer = true;
+            System.out.println("Set this node as an introducer!");
+        }
+        if (setting.indexOf("-m") != -1) {
+            isMaster = true;
+            System.out.println("Set this node as a master!");
+        }
+        if (!setting.equals("") && !isIntroducer && !isMaster) {
+            System.err.println("Could not recognize the input argument");
+            System.err.println("Please enter the argument as the following format: <configFilePath> <-i> <-m>");
+            System.exit(1);
         }
 
         Daemon daemon = new Daemon(configPath);
@@ -387,17 +148,20 @@ public class Daemon {
                     case "join":
                         // to deal with the case that users enter "JOIN" command multiple times
                         if (membershipList.size() == 0) {
-                            ExecutorService mPool = Executors.newFixedThreadPool(4 + ((isIntroducer) ? 1 : 0));
+                            ExecutorService mPool =
+                                    Executors.newFixedThreadPool(
+                                            4 + ((isIntroducer)? 1: 0) + ((isMaster)? 2: 0));
                             mPool.execute(new FileServer());
-                            daemon.joinGroup(isIntroducer);
-                            if (isIntroducer) {
-                                mPool.execute(new IntroducerThread());
-                            }
+                            if (isMaster) mPool.execute(new Master());
+                            DaemonHelper.joinGroup(isIntroducer, isMaster);
+                            if (isIntroducer) mPool.execute(new IntroducerThread());
+                            if (isMaster) mPool.execute(new MasterSyncThread());
                             mPool.execute(new ListeningThread());
                             mPool.execute(new HeartbeatThread(100));
                             mPool.execute(new MonitorThread());
-                        }
-                        System.out.println("join successfully");
+                            System.out.println("join successfully");
+                        } else System.out.println("Duplicated join!");
+
                         break;
 
                     case "member":
@@ -406,10 +170,18 @@ public class Daemon {
                         int size = hashValues.size();
                         Integer[] keySet = new Integer[size];
                         hashValues.navigableKeySet().toArray(keySet);
-
                         for (Integer key : keySet) {
-                            System.out.println(hashValues.get(key));
+                            System.out.println(hashValues.get(key) +
+                                    Arrays.toString(membershipList.get(hashValues.get(key))) + "/" + key);
                         }
+                        System.out.println("===============================");
+                        System.out.println("Neighbor List:");
+                        for (String neighbor: neighbors) {
+                            System.out.println(neighbor);
+                        }
+                        System.out.println("===============================");
+                        System.out.println("Master:");
+                        System.out.println(master);
                         System.out.println("===============================");
                         break;
 
@@ -420,34 +192,37 @@ public class Daemon {
                     case "leave":
                         if (membershipList.size() != 0) {
                             Protocol.sendGossip(ID, "Leave", membershipList.get(ID)[0] + 10,
-                                    3, 4, new DatagramSocket());
+                                    membershipList.get(ID)[1],3, 4, new DatagramSocket());
                         }
                         fileOutput.println(LocalDateTime.now().toString() + " \"LEAVE!!\" " + ID);
                         fileOutput.close();
                         System.exit(0);
 
                     case "put":
-                        writeLog(cmd, "");
+                        DaemonHelper.writeLog(cmd, "");
                         userCommand.putFile(cmdParts);
                         break;
                     case "get":
-                        writeLog(cmd, "");
+                        DaemonHelper.writeLog(cmd, "");
                         userCommand.getFile(cmdParts);
                         break;
                     case "delete":
-                        writeLog(cmd, "");
+                        DaemonHelper.writeLog(cmd, "");
                         userCommand.deleteFile(cmdParts);
                         break;
                     case "ls":
-                        writeLog(cmd, "");
+                        DaemonHelper.writeLog(cmd, "");
                         userCommand.listFile(cmdParts);
                         break;
                     case "store":
-                        writeLog(cmd, "");
+                        DaemonHelper.writeLog(cmd, "");
                         System.out.println("SDFS files stored at this node are: ");
                         for (String s : FilesOP.listFiles("../SDFS/"))
                             System.out.println(s);
                         System.out.println("===============================");
+                        break;
+                    case "sava":
+                        //userCommand.savaGraph(cmdParts);
                         break;
                     default:
                         System.out.println("Unsupported command!");
@@ -455,7 +230,7 @@ public class Daemon {
                 }
             }
 
-        } catch (Exception e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }

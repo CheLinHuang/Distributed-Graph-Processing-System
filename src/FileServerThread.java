@@ -6,7 +6,6 @@ import java.util.List;
 public class FileServerThread extends Thread {
 
     Socket socket;
-    private static int numOfReplica = 3;
 
     public FileServerThread(Socket socket) {
         this.socket = socket;
@@ -16,122 +15,89 @@ public class FileServerThread extends Thread {
     public void run() {
 
         try (
-                DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-                DataInputStream clientData = new DataInputStream(socket.getInputStream())
+                DataOutputStream sktOutput = new DataOutputStream(socket.getOutputStream());
+                DataInputStream sktInput = new DataInputStream(socket.getInputStream())
         ) {
 
-            Daemon.writeLog("FileServerThread established", socket.getRemoteSocketAddress().toString());
-            String operation = clientData.readUTF();
-            Daemon.writeLog(operation + " request", socket.getRemoteSocketAddress().toString());
+            String operation = "";
+            String sdfsfilename = "";
+            try{
+                operation = sktInput.readUTF();
+                sdfsfilename = sktInput.readUTF();
+            } catch (Exception e) {
+                return;
+            }
+            DaemonHelper.writeLog("##FileServer## Received Request: " + operation,
+                    socket.getRemoteSocketAddress().toString());
 
             switch (operation) {
-                case "put": {
 
-                    // Read filename from clientData.readUTF()
-                    String sdfsfilename = clientData.readUTF();
-                    Daemon.writeLog(sdfsfilename, "");
+                case "PUT REPLICA": {
 
-                    SocketAddress socketAddress = socket.getRemoteSocketAddress();
-                    FileServer.putQueue.add(socketAddress);
+                    if (sktInput.readUTF().equals("KEEP")) {
 
-                    while (!(FileServer.lock.tryLock() && FileServer.putQueue.peek() == socketAddress)) {
-                        if (FileServer.lock.isHeldByCurrentThread()) {
-                            FileServer.lock.unlock();
-                        }
-                    }
-
-                    // Open the file in SDFS
-                    File sdfsfile = new File("../SDFS/" + sdfsfilename);
-
-                    if (sdfsfile.exists() && System.currentTimeMillis() - sdfsfile.lastModified() < 60000) {
-                        // Require confirmation to put file
-                        out.writeUTF("Confirm");
-                        String clientConfirmation = clientData.readUTF();
-                        if (clientConfirmation.equals("N")) {
-                            FileServer.putQueue.poll();
-                            FileServer.lock.unlock();
-                            break;
-                        }
-                    } else {
-                        out.writeUTF("Accept");
-                    }
-
-                    int count = 0;
-                    BufferedOutputStream fileOutputStream = new BufferedOutputStream(
-                            new FileOutputStream("../SDFS/" + sdfsfilename));
-
-                    long fileSize = clientData.readLong();
-
-                    Daemon.writeLog("file size", Long.toString(fileSize));
-
-                    byte[] buffer = new byte[Daemon.bufferSize];
-                    int bytes;
-                    while (fileSize > 0 && (bytes = clientData.read(buffer, 0, (int) Math.min(Daemon.bufferSize, fileSize))) != -1) {
-                        fileOutputStream.write(buffer, 0, bytes);
-                        fileSize -= bytes;
-                    }
-                    fileOutputStream.close();
-
-                    File file = new File("../SDFS/" + sdfsfilename);
-                    count++;
-                    Daemon.writeLog("receive file size", Long.toString(file.length()));
-
-                    // Send replica to other nodes
-                    int index = Daemon.neighbors.size() - 1;
-                    Thread[] threads = new Thread[2];
-
-                    for (int i = 0; index >= 0 && i < 2; i++) {
-                        Socket replicaSocket = new Socket(Daemon.neighbors.get(index).split("#")[1], Daemon.filePortNumber);
-                        DataOutputStream outPrint = new DataOutputStream(replicaSocket.getOutputStream());
-                        outPrint.writeUTF("replica");
-                        outPrint.writeUTF(sdfsfilename);
-                        threads[i] = FilesOP.sendFile(file, replicaSocket);
-                        threads[i].start();
-                        index--;
-                    }
-
-                    for (Thread t : threads)
-                        if (t != null) {
-                            t.join();
-                            count++;
-                            // quorum write
-                            if (count >= Math.ceil((double) numOfReplica / 2) || count == Daemon.membershipList.size()) {
-                                out.writeUTF("Received");
+                        File sdfsfile = new File("../SDFS/" + sdfsfilename);
+                        try {
+                            // Open the file in SDFS for writing
+                            BufferedOutputStream fileOutputStream = new BufferedOutputStream(
+                                    new FileOutputStream(sdfsfile));
+                            long fileTimeStamp = sktInput.readLong();
+                            long fileSize = sktInput.readLong();
+                            System.out.println("Received File Size: " + fileSize);
+                            byte[] buffer = new byte[Daemon.bufferSize];
+                            int bytes;
+                            while (fileSize > 0 &&
+                                    (bytes = sktInput.read(buffer, 0, (int) Math.min(Daemon.bufferSize, fileSize))) != -1) {
+                                fileOutputStream.write(buffer, 0, bytes);
+                                fileSize -= bytes;
                             }
+                            fileOutputStream.close();
+
+                            FileServer.fileList.put(sdfsfilename, fileTimeStamp);
+                            sktOutput.writeUTF("RECEIVED");
+                            DaemonHelper.writeLog("Receive file successfully", "");
+                        } catch (Exception e) {
+                            sdfsfile.delete();
+                            FileServer.fileList.remove(sdfsfilename);
                         }
-                    FileServer.putQueue.poll();
-                    FileServer.lock.unlock();
-                    break;
-                }
-                case "replica": {
-                    // Read filename from clientData.readUTF()
-                    String sdfsfilename = clientData.readUTF();
-                    Daemon.writeLog(sdfsfilename, "");
-
-                    // Replica request write immediately
-                    BufferedOutputStream fileOutputStream = new BufferedOutputStream(
-                            new FileOutputStream("../SDFS/" + sdfsfilename));
-
-                    long fileSize = clientData.readLong();
-                    Daemon.writeLog("file size", Long.toString(fileSize));
-                    byte[] buffer = new byte[Daemon.bufferSize];
-                    int bytes;
-                    while (fileSize > 0 && (bytes = clientData.read(buffer, 0, (int) Math.min(Daemon.bufferSize, fileSize))) != -1) {
-                        fileOutputStream.write(buffer, 0, bytes);
-                        fileSize -= bytes;
                     }
-                    fileOutputStream.close();
-
-                    File file = new File("../SDFS/" + sdfsfilename);
-                    out.writeUTF("Received");
-                    Daemon.writeLog("receive file size", Long.toString(file.length()));
-
                     break;
                 }
+                case "GET REPLICA": {
+                    if (!FileServer.fileList.containsKey(sdfsfilename))
+                        sktOutput.writeLong(-1);
+                    else {
+                        sktOutput.writeLong(FileServer.fileList.get(sdfsfilename));
+                        String response = sktInput.readUTF();
+                        if (response.equals("RESUME")) {
+                            // Open the file in SDFS
+                            File file = new File("../SDFS/" + sdfsfilename);
+                            FilesOP.sendFile2(file, socket);
+                            DaemonHelper.writeLog("get complete", sdfsfilename);
+                        }
+                    }
+                    break;
+                }
+                case "DELETE REPLICA": {
+                    if (FilesOP.deleteFile("../SDFS/" + sdfsfilename)) {
+                        sktOutput.writeUTF("DONE");
+                        FileServer.fileList.remove(sdfsfilename);
+                    }
+                    else
+                        sktOutput.writeUTF("FILE_NOT_FOUND");
+                    break;
+                }
+                case "LIST REPLICA": {
+                    if (FileServer.fileList.containsKey(sdfsfilename))
+                        sktOutput.writeUTF("FILE_FOUND");
+                    else sktOutput.writeUTF("FILE_NOT_FOUND");
+                    break;
+                }
+                /*
                 case "fail replica": {
                     // Read filename from clientData.readUTF()
-                    String sdfsfilename = clientData.readUTF();
-                    Daemon.writeLog(sdfsfilename, "");
+                    //String sdfsfilename = clientData.readUTF();
+                    DaemonHelper.writeLog(sdfsfilename, "");
 
                     if (!new File("../SDFS/" + sdfsfilename).exists()) {
 
@@ -149,40 +115,21 @@ public class FileServerThread extends Thread {
                         }
                         fileOutputStream.close();
                         out.writeUTF("Received");
-                        Daemon.writeLog("Receive Replica", "");
+                        DaemonHelper.writeLog("Receive Replica", "");
 
                     } else {
 
                         // Replica exist, no need to overwrite
-                        Daemon.writeLog("Replica Exist", "");
+                        DaemonHelper.writeLog("Replica Exist", "");
                         out.writeUTF("Replica Exist");
                     }
                     break;
                 }
-                case "get": {
-                    // Read filename from clientData.readUTF()
-                    String sdfsfilename = clientData.readUTF();
-                    Daemon.writeLog(sdfsfilename, "");
 
-                    // Open the file in SDFS
-                    File file = new File("../SDFS/" + sdfsfilename);
-                    if (!file.exists()) {
-                        Daemon.writeLog("File Not Exist", "");
-                        out.writeUTF("File Not Exist");
-                    } else {
-                        Daemon.writeLog("File Exist", "");
-                        out.writeUTF("File Exist");
-                        Thread t = FilesOP.sendFile(file, socket);
-                        t.start();
-                        t.join();
-                    }
-                    Daemon.writeLog("get complete", sdfsfilename);
-                    break;
-                }
                 case "delete": {
                     // Read filename from clientData.readUTF()
                     String sdfsfilename = clientData.readUTF();
-                    Daemon.writeLog(sdfsfilename, "");
+                    DaemonHelper.writeLog(sdfsfilename, "");
 
                     FilesOP.deleteFile("../SDFS/" + sdfsfilename);
 
@@ -198,17 +145,11 @@ public class FileServerThread extends Thread {
                     }
                     break;
                 }
-                case "delete replica": {
-                    // Read filename from clientData.readUTF()
-                    String sdfsfilename = clientData.readUTF();
-                    Daemon.writeLog(sdfsfilename, "");
-                    FilesOP.deleteFile("../SDFS/" + sdfsfilename);
-                    break;
-                }
+
                 case "ls": {
                     // Read filename from clientData.readUTF()
                     String sdfsFileName = clientData.readUTF();
-                    Daemon.writeLog(sdfsFileName, "");
+                    DaemonHelper.writeLog(sdfsFileName, "");
 
                     String queryResult = "";
                     // query the file locally on the coordinator
@@ -235,7 +176,7 @@ public class FileServerThread extends Thread {
                                 queryResult += result + "#";
                             }
 
-                        } catch (Exception e) {
+                        } catch (IOException e) {
                             e.printStackTrace();
                         }
                     }
@@ -250,7 +191,7 @@ public class FileServerThread extends Thread {
                 case "ls replica": {
                     // check if the query file exists on the replica node
                     String sdfsFileName = clientData.readUTF();
-                    Daemon.writeLog(sdfsFileName, "");
+                    DaemonHelper.writeLog(sdfsFileName, "");
 
                     if (new File("../SDFS/" + sdfsFileName).exists()) {
                         out.writeUTF(Daemon.ID.split("#")[1]);
@@ -276,13 +217,12 @@ public class FileServerThread extends Thread {
                         out.writeUTF("Empty");
                     }
                 }
+                */
             }
-
+            //release the resource
+            socket.close();
         } catch (Exception e) {
             e.printStackTrace();
-        } finally {
-            if (FileServer.lock.isHeldByCurrentThread())
-                FileServer.lock.unlock();
         }
     }
 }

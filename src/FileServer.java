@@ -1,15 +1,13 @@
+import java.io.IOException;
 import java.net.ServerSocket;
-import java.net.SocketAddress;
-import java.util.Queue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.*;
 
 public class FileServer extends Thread {
 
-    static ReentrantLock lock = new ReentrantLock();
-    static Queue<SocketAddress> putQueue = new LinkedBlockingQueue<>();
+    static Map<String, Long> fileList = new HashMap<>();
 
     public void run() {
+        System.out.println("File Server Established @ port#: " + Daemon.filePortNumber);
         boolean listening = true;
 
         // Keep listening for incoming file related request
@@ -19,7 +17,7 @@ public class FileServer extends Thread {
             while (listening)
                 new FileServerThread(serverSocket.accept()).start();
 
-        } catch (Exception e) {
+        } catch (IOException e) {
             System.err.println("Could not listen to port " + Daemon.filePortNumber);
             System.exit(-1);
         }

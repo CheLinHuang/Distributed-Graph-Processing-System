@@ -1,5 +1,6 @@
 import java.io.*;
 import java.net.Socket;
+import java.util.*;
 
 public class userCommand {
 
@@ -14,87 +15,110 @@ public class userCommand {
 
         String srcFileName = cmdParts[1];
         String tgtFileName = cmdParts[2];
-        String fileServer = Hash.getServer(Hash.hashing(tgtFileName, 8)).split("#")[1];
-        Daemon.writeLog("put file to", fileServer);
+        DaemonHelper.writeLog("put file to", Daemon.master.split("#")[1]);
 
         // Open the local file
         File file = new File(srcFileName);
         if (!file.exists()) {
-            Daemon.writeLog("Local file not exist", srcFileName);
+            DaemonHelper.writeLog("Local file not exist", srcFileName);
             System.out.println("Local file not exist!");
         } else {
-            try {
-                // Connect to server
-                Socket socket = new Socket(fileServer, Daemon.filePortNumber);
-                DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
-                DataInputStream in = new DataInputStream(socket.getInputStream());
-                dos.writeUTF("put");
-                dos.writeUTF(tgtFileName);
-                String response = in.readUTF();
-                Daemon.writeLog("Server response", response);
 
-                Thread t = null;
-                if (response.equals("Accept")) {
-                    // Accept the put file request
-                    t = FilesOP.sendFile(file, socket);
-                } else if (response.equals("Confirm")) {
-
-                    // Require confirmation to put file
-                    System.out.println("Are you sure to send the file? (y/n)");
-                    BufferedReader StdIn = new BufferedReader(new InputStreamReader(System.in));
-
-                    // Require confirmation within 30 sec
-                    long startTime = System.currentTimeMillis();
-                    while (((System.currentTimeMillis() - startTime) < 30000) && !StdIn.ready()) {
-                        try {
-                            Thread.sleep(200);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    }
-
-                    if (StdIn.ready()) {
-                        boolean repeat = true;
-                        while (repeat) {
-                            String cmd = StdIn.readLine().toLowerCase();
-                            switch (cmd) {
-                                case "y":
-                                    dos.writeUTF("Y");
-                                    Daemon.writeLog("Force put within 1 min", tgtFileName);
-                                    t = FilesOP.sendFile(file, socket);
-                                    repeat = false;
-                                    break;
-                                case "n":
-                                    dos.writeUTF("N");
-                                    Daemon.writeLog("Reject put within 1 min", tgtFileName);
-                                    repeat = false;
-                                    // do nothing
-                                    break;
-                                default:
-                                    System.out.println("Unsupported command!");
-                                    System.out.println("Are you sure to send the file? (y/n)");
-                            }
-                        }
-                    } else {
-                        dos.writeUTF("N");
-                        Daemon.writeLog("No response for confirmation", tgtFileName);
-                        System.out.println("No response! Update aborted!");
+            boolean forceWrite = false;
+            while (true) {
+                try {
+                    sendFile("PUT", new ArrayList<>(), file, tgtFileName, forceWrite);
+                    // if the file is successfully sent, break the while loop
+                    break;
+                } catch (Exception e) {
+                    // if exception occurs, wait for a while and resend the file
+                    forceWrite = true;
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException ex) {
+                        // do nothing
                     }
                 }
-
-                // If SendFileThread exist, send file
-                if (t != null) {
-                    t.start();
-                    t.join();
-                }
-
-                Daemon.writeLog("put complete", tgtFileName);
-                socket.close();
-            } catch (Exception e) {
-                e.printStackTrace();
             }
         }
     }
+
+    public static void sendFile(
+            String operation, List<String> extraInfo,
+            File srcFile, String tgtFileName, boolean forceWrite) throws Exception {
+
+        Socket socket = new Socket(
+                Daemon.master.split("#")[1], Daemon.masterPortNumber);
+        DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
+        DataInputStream in = new DataInputStream(socket.getInputStream());
+        dos.writeUTF(operation);
+        dos.writeUTF(tgtFileName);
+        // extraInfo contains additional information about graph
+        if (extraInfo.size() > 0) {
+            dos.writeInt(extraInfo.size());
+            for (String info : extraInfo)
+                dos.writeUTF(info);
+        }
+        String response = in.readUTF();
+        DaemonHelper.writeLog("Server response", response);
+
+        //Thread t = null;
+        if (response.equals("ACCEPT") || forceWrite) {
+            // Accept the put file request
+            FilesOP.sendFile2(srcFile, socket);
+
+        } else if (response.equals("CONFIRM")) {
+
+            // Require confirmation to put file
+            System.out.println("Are you sure to send the file? (y/n)");
+            BufferedReader StdIn = new BufferedReader(new InputStreamReader(System.in));
+
+            // Require confirmation within 30 sec
+            long startTime = System.currentTimeMillis();
+            while (((System.currentTimeMillis() - startTime) < 30000) && !StdIn.ready()) {
+                try {
+                    Thread.sleep(200);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+
+            if (StdIn.ready()) {
+                boolean repeat = true;
+                while (repeat) {
+                    String cmd = StdIn.readLine().toLowerCase();
+                    switch (cmd) {
+                        case "y":
+                            dos.writeUTF("Y");
+                            DaemonHelper.writeLog("Allow file update within 1 min", tgtFileName);
+                            //t = FilesOP.sendFile(file, socket);
+                            FilesOP.sendFile2(srcFile, socket);
+                            repeat = false;
+                            break;
+                        case "n":
+                            dos.writeUTF("N");
+                            DaemonHelper.writeLog("Reject file update within 1 min", tgtFileName);
+                            repeat = false;
+                            // do nothing
+                            break;
+                        default:
+                            System.out.println("Unsupported command!");
+                            System.out.println("Are you sure to send the file? (y/n)");
+                    }
+                }
+            } else {
+                dos.writeUTF("N");
+                DaemonHelper.writeLog("No response for confirmation", tgtFileName);
+                System.out.println("No response! Update aborted!");
+            }
+        }
+        if (in.readUTF().equals("DONE"))
+            System.out.println("Put the file successfully!");
+        else System.out.println("Update aborted!");
+        DaemonHelper.writeLog("put complete", tgtFileName);
+        socket.close();
+    }
+
 
     public static void listFile(String[] cmdParts) {
 
@@ -106,34 +130,32 @@ public class userCommand {
         }
 
         String sdfsFileName = cmdParts[1];
-        String fileServer = Hash.getServer(Hash.hashing(sdfsFileName, 8)).split("#")[1];
+        String fileServer = Daemon.master.split("#")[1];
 
         try {
             // Connect to server
-            Socket socket = new Socket(fileServer, Daemon.filePortNumber);
+            Socket socket = new Socket(fileServer, Daemon.masterPortNumber);
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
             DataInputStream in = new DataInputStream(socket.getInputStream());
-            out.writeUTF("ls");
+            out.writeUTF("LIST");
             out.writeUTF(sdfsFileName);
 
             socket.setSoTimeout(2000);
             String response = in.readUTF();
-            if (response.equals("Empty")) {
-                Daemon.writeLog("No such file!", sdfsFileName);
-                System.out.println("No such file!");
+            if (response.equals("EMPTY")) {
+                System.out.println("File doesn't exist");
             } else {
                 String[] nodes = response.split("#");
-                Daemon.writeLog("File on node:", "");
                 System.out.println(sdfsFileName + " is stored in the following nodes:");
                 for (String node : nodes) {
-                    Daemon.writeLog("", node);
                     System.out.println(node);
                 }
                 System.out.println("==================================");
             }
             socket.close();
-        } catch (Exception e) {
+        } catch (IOException e) {
             e.printStackTrace();
+            listFile(cmdParts);
         }
     }
 
@@ -147,42 +169,48 @@ public class userCommand {
 
         String sdfsfilename = cmdParts[1];
         String localfilename = cmdParts[2];
-        String fileServer = Hash.getServer(Hash.hashing(sdfsfilename, 8)).split("#")[1];
-        Daemon.writeLog("Get file from", fileServer);
+        String fileServer = Daemon.master.split("#")[1];
+        File localFile = new File(localfilename);
         try {
             // Connect to server
-            Socket socket = new Socket(fileServer, Daemon.filePortNumber);
+            Socket socket = new Socket(fileServer, Daemon.masterPortNumber);
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
             DataInputStream in = new DataInputStream(socket.getInputStream());
-            out.writeUTF("get");
+            out.writeUTF("GET");
             out.writeUTF(sdfsfilename);
 
             String response = in.readUTF();
-            Daemon.writeLog("Server response", response);
+            System.out.println("Server Response: " + response);
 
-            if (response.equals("File Exist")) {
+            if (response.equals("FILE_FOUND")) {
+                System.out.println("File is found! Start to fetch file!");
                 BufferedOutputStream fileOutputStream = new BufferedOutputStream(
-                        new FileOutputStream(localfilename));
+                        new FileOutputStream(localFile));
 
                 long fileSize = in.readLong();
-                Daemon.writeLog("Get file size", Long.toString(fileSize));
                 byte[] buffer = new byte[Daemon.bufferSize];
                 int bytes;
-                while (fileSize > 0 && (bytes = in.read(buffer, 0, (int) Math.min(Daemon.bufferSize, fileSize))) != -1) {
+                while (fileSize > 0 && (bytes = in.read(buffer, 0,
+                        (int) Math.min(Daemon.bufferSize, fileSize))) != -1) {
                     fileOutputStream.write(buffer, 0, bytes);
                     fileSize -= bytes;
                 }
                 fileOutputStream.close();
-                out.writeUTF("Received");
                 System.out.println("get the file successfully");
-                Daemon.writeLog("get complete", sdfsfilename);
+                DaemonHelper.writeLog("Get file completed", sdfsfilename);
             } else {
-                System.out.println("File not exist!");
+                System.out.println("File not found!");
+                DaemonHelper.writeLog("File not found", sdfsfilename);
             }
-
             socket.close();
         } catch (Exception e) {
-            e.printStackTrace();
+            localFile.delete();
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException ie) {
+                // do nothing
+            }
+            getFile(cmdParts);
         }
     }
 
@@ -195,17 +223,79 @@ public class userCommand {
         }
 
         String sdfsfilename = cmdParts[1];
-        String fileServer = Hash.getServer(Hash.hashing(sdfsfilename, 8)).split("#")[1];
+        String fileServer = Daemon.master.split("#")[1];
 
         try {
-            Socket socket = new Socket(fileServer, Daemon.filePortNumber);
+            Socket socket = new Socket(fileServer, Daemon.masterPortNumber);
             DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
-            dos.writeUTF("delete");
+            DataInputStream dis = new DataInputStream(socket.getInputStream());
+            dos.writeUTF("DELETE");
             dos.writeUTF(sdfsfilename);
-            System.out.println("delete the file successfully");
+            if (dis.readUTF().equals("DONE"))
+                System.out.println("Delete the file successfully!");
+            else System.out.println("File doesn't exist!");
             socket.close();
         } catch (Exception e) {
-            e.printStackTrace();
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException ie) {
+                // do nothing
+            }
+            deleteFile(cmdParts);
+        }
+    }
+
+    public static void savaGraph(String[] cmdParts) {
+        // System.out.println("Enter \"sava task(pagerank/sssp) taskparams localgraphfile outputsdfsfilename");
+        // taskparams are:
+        // [damping factor, numOfIteration(Optional)] for PageRank
+        // [sourceVertex, numOfIteration (Optional)] for Single Source Shortest Path
+
+        // handle invalid input
+        String task = cmdParts[1].toLowerCase();
+        List<String> params = new ArrayList<>();
+        params.add(Daemon.ID);
+
+        if (!task.equals("pagerank") && !task.equals("sssp")) {
+            System.out.println("Unsupported task!");
+            System.out.println("Please select task from [pagerank, sssp]");
+            return;
+        }
+
+        if (cmdParts.length != 6) {
+            System.out.println("Unsupported command format");
+            System.out.println(
+                    "Please enter \"sava pagerank\\sssp dampingFactor "
+                            + "Iteration\\Threshold localgraphfile outputsdfsfilename\"");
+            return;
+        }
+
+        for (int i = 1; i < cmdParts.length - 2; i++) {
+            params.add(cmdParts[i].toLowerCase());
+        }
+
+        String localGraphFile = cmdParts[cmdParts.length - 2];
+        File file = new File(localGraphFile);
+        if (!file.exists()) {
+            System.out.println("Local file not exist!");
+            return;
+        }
+        // input is valid, starts to put the graph into the SDFS
+        String outputFile = cmdParts[cmdParts.length - 1];
+        params.add(outputFile);
+
+        boolean forceWrite = false;
+        while (true)
+        try {
+            sendFile("SAVA", params, file, localGraphFile, forceWrite);
+            break;
+        } catch (Exception e) {
+            forceWrite = true;
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException ex) {
+                // do nothing
+            }
         }
     }
 }

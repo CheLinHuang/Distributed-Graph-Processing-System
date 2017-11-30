@@ -30,24 +30,21 @@ public class MonitorThread extends Thread {
             boolean update = false;
             List<String> timeoutID = new ArrayList<>();
             List<Long> timeoutCounter = new ArrayList<>();
-
             synchronized (Daemon.membershipList) {
                 synchronized (Daemon.neighbors) {
                     for (String key : Daemon.neighbors) {
 
                         // iterate through the neighbors, check if time until last time stamp is bigger than timeout
-                        if (System.currentTimeMillis() - Daemon.membershipList.get(key)[1] > 2000) {
+                        if (System.currentTimeMillis() - Daemon.membershipList.get(key)[2] > 2000) {
 
                             // if it's bigger than timeout, remove this node and record it
                             timeoutID.add(key);
                             timeoutCounter.add(Daemon.membershipList.get(key)[0]);
                             Daemon.membershipList.remove(key);
                             Daemon.hashValues.remove(Hash.hashing(key, 8));
-                            Daemon.writeLog("FAILURE", key);
+                            DaemonHelper.writeLog("FAILURE", key);
                             update = true;
 
-                        } else {
-                            //Daemon.writeLog("PASS", key);
                         }
                     }
                 }
@@ -55,12 +52,28 @@ public class MonitorThread extends Thread {
 
             // If there is an update in membership list, send the gossip and update the neighbors
             if (update) {
-                Daemon.updateNeighbors();
-                if (Daemon.neighborUpdated) Daemon.moveReplica(false);
+                DaemonHelper.updateNeighbors();
+                boolean masterFailed = false;
                 for (int i = 0; i < timeoutID.size(); i++) {
-                    Protocol.sendGossip(timeoutID.get(i), "Remove", timeoutCounter.get(i),
-                            3, 4, monitorSocket);
-                    Daemon.writeLog("REMOVE", timeoutID.get(i));
+                    if (Daemon.masterList.containsKey(timeoutID.get(i))) {
+                        Protocol.sendGossip(timeoutID.get(i), "Remove", timeoutCounter.get(i),
+                                Daemon.MASTER,3, 4, monitorSocket);
+                        Daemon.masterList.remove(timeoutID.get(i));
+                        masterFailed = true;
+                    } else {
+                        Protocol.sendGossip(timeoutID.get(i), "Remove", timeoutCounter.get(i),
+                                Daemon.WORKER,3, 4, monitorSocket);
+                    }
+                    DaemonHelper.writeLog("REMOVE", timeoutID.get(i));
+                }
+                synchronized (Daemon.membershipList) {
+                    if (masterFailed && !Daemon.membershipList.containsKey(Daemon.master))
+                        DaemonHelper.masterElection();
+                }
+                try {
+                    DaemonHelper.checkReplica();
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
             }
         }

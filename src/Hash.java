@@ -1,4 +1,5 @@
 import java.lang.Math;
+import java.util.*;
 
 public class Hash {
 
@@ -17,28 +18,40 @@ public class Hash {
 
         return (int)hashValue;
     }
-    public static String getServer(int hashValue) {
+    public static List<String> getTargetNode(int fileHashValue) {
+        System.out.println(fileHashValue);
+        synchronized (Daemon.hashValues) {
+            int size = Daemon.hashValues.navigableKeySet().size();
+            Integer[] keySet = new Integer[size];
+            Daemon.hashValues.navigableKeySet().toArray(keySet);
+            System.out.println(Arrays.toString(keySet));
 
-        int size = Daemon.hashValues.navigableKeySet().size();
-        Integer[] keySet = new Integer[size];
-        Daemon.hashValues.navigableKeySet().toArray(keySet);
+            int min = keySet[0].intValue();
+            int max = keySet[size - 1].intValue();
+            List<String> targetNodes = new ArrayList<>();
 
-        int min = keySet[0].intValue();
-        int max = keySet[size-1].intValue();
-
-        if (hashValue > max) {
-            return Daemon.hashValues.get(keySet[0]);
-        }
-        if (hashValue < min) {
-            return Daemon.hashValues.get(keySet[size - 1]);
-        }
-        int targetIndex = -1;
-        for (int i = 0; i < size; i++) {
-            if (keySet[i].intValue() >= hashValue && keySet[i - 1].intValue() < hashValue) {
-                targetIndex = i;
+            int targetIndex = -1;
+            if (fileHashValue > max || fileHashValue < min) targetIndex = 0;
+            else {
+                for (int i = 1; i < size; i++) {
+                    if (keySet[i].intValue() >= fileHashValue && keySet[i - 1].intValue() < fileHashValue) {
+                        targetIndex = i;
+                        break;
+                    }
+                }
             }
-        }
-        return Daemon.hashValues.get(keySet[targetIndex]);
-    }
+            targetNodes.add(Daemon.hashValues.get(keySet[targetIndex]));
+            // the successors of the targetNode into the list
+            for (int i = 0; i < 2; i++) {
+                targetIndex = (targetIndex + 1) % size;
+                // if the successor is equal to itself, this means that the number
+                // of its successors is less than 2
+                if (targetNodes.contains(Daemon.hashValues.get(keySet[targetIndex])))
+                    break;
+                targetNodes.add(Daemon.hashValues.get(keySet[targetIndex]));
 
+            }
+            return targetNodes;
+        }
+    }
 }

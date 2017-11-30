@@ -2,6 +2,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.util.Map;
+import java.util.Arrays;
 
 public class IntroducerThread extends Thread {
 
@@ -30,18 +31,26 @@ public class IntroducerThread extends Thread {
                 DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
                 introducerSocket.receive(receivePacket);
 
-                // the new member sent it's ID
+                // the new member's information
+                // the format of joinID is: TimeStamp#Domain Name#isMaster
                 String joinID = new String(receivePacket.getData(), 0, receivePacket.getLength());
 
                 // extract new member's IP address
                 InetAddress IPAddress = InetAddress.getByName(joinID.split("#")[1]);
+                boolean isMaster = joinID.split("#")[2].equals("M") ? true : false;
 
                 // assign status and add to the membership list
-                long[] status = {0, System.currentTimeMillis()};
-                Daemon.membershipList.put(joinID, status);
-                Daemon.hashValues.put(Hash.hashing(joinID, 8), joinID);
-
+                long[] status = {0, isMaster? Daemon.MASTER: Daemon.WORKER, System.currentTimeMillis()};
+                // System.out.println(Arrays.toString(status));
+                Daemon.membershipList.put(joinID.substring(0, joinID.length()-2), status);
+                Daemon.hashValues.put(Hash.hashing(joinID.substring(0, joinID.length()-2), 8),
+                        joinID.substring(0, joinID.length()-2));
+                if (isMaster) {
+                    Daemon.masterList.put(joinID.substring(0, joinID.length() - 2),
+                            Hash.hashing(joinID.substring(0, joinID.length()-2), 8));
+                }
                 // build the whole membership list string
+                // the format of the string for each node is NodeID/counter#isMaster%
                 StringBuilder sb = new StringBuilder();
                 synchronized (Daemon.membershipList) {
                     for (Map.Entry<String, long[]> entry : Daemon.membershipList.entrySet()) {
@@ -49,6 +58,8 @@ public class IntroducerThread extends Thread {
                         sb.append('/');
                         long[] memberStatus = entry.getValue();
                         sb.append(memberStatus[0]);
+                        sb.append('/');
+                        sb.append(memberStatus[1]);
                         sb.append('%');
                     }
                 }
@@ -57,15 +68,24 @@ public class IntroducerThread extends Thread {
                 sendData = sb.toString().getBytes();
                 DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, receivePacket.getPort());
                 introducerSocket.send(sendPacket);
+                // send the current master back
+                sendData = Daemon.master.getBytes();
+                sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, receivePacket.getPort());
+                introducerSocket.send(sendPacket);
 
-                // Gossip the new member join
-                Protocol.sendGossip(joinID, "Add", 0, 3, 4, introducerSocket);
+                // Send gossip to old members to inform them a new node is coming
+                Protocol.sendGossip(joinID.substring(0, joinID.length() - 2),
+                        "Add", 0, isMaster? Daemon.MASTER: Daemon.WORKER,
+                        3, 4, introducerSocket);
 
                 // update my neighbor
-                Daemon.updateNeighbors();
-                if (Daemon.neighborUpdated) Daemon.moveReplica(false);
-
-                Daemon.writeLog("ADD", joinID);
+                DaemonHelper.updateNeighbors();
+                synchronized (Daemon.membershipList) {
+                    if (!Daemon.membershipList.containsKey(Daemon.master))
+                        DaemonHelper.masterElection();
+                }
+                DaemonHelper.checkReplica();
+                DaemonHelper.writeLog("ADD", joinID);
 
             } catch (Exception e) {
                 e.printStackTrace();

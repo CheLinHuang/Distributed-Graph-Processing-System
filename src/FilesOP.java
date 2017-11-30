@@ -15,7 +15,7 @@ public class FilesOP {
             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
 
-            HashMap<Integer, Vertex> hm = readFiles(new File("../com-amazon.ungraph.txt"));
+            HashMap<Integer, Vertex> hm = readFiles(new File("../test.txt"));
 
             for (int i : hm.keySet()) {
                 hm.get(i).value = 1.0; // / hm.size();
@@ -35,7 +35,7 @@ public class FilesOP {
 
             time1 = System.currentTimeMillis() - time1;
 
-            out.writeUTF("add");
+            out.writeUTF("ADD");
             out.flush();
             out.writeInt(hm.size());
             out.flush();
@@ -56,24 +56,24 @@ public class FilesOP {
 
             int it = 20;
             while (it > 0) {
-                out.writeUTF("iter");
+                out.writeUTF("ITERATION");
                 out.flush();
                 it--;
                 System.out.println(in.readUTF());
             }
 
-            out.writeUTF("finish");
+            out.writeUTF("TERMINATE");
             out.flush();
 
             int num = in.readInt();
             System.out.println(num);
 
             List<String> list = new ArrayList<>();
+            
             while (num > 0) {
                 int numm = in.readInt();
                 double d = in.readDouble();
                 Formatter ff = new Formatter();
-                //list.add(numm + "," + ff.format("%.5f", d));
                 list.add(numm + "," + d);
                 num--;
             }

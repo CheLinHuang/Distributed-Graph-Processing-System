@@ -31,32 +31,23 @@ public class GraphServerThread extends Thread {
 
 
                 switch (operation) {
-                    case "add": {
-
-                        int num = in.readInt();
+                    case "ADD": {
 
                         // build local graph
-                        while (num > 0) {
-                            Vertex v = (Vertex) in.readObject();
-                            GraphServer.graph.put(v.ID, v);
-                            GraphServer.incoming.put(v.ID, new ArrayList<>());
-                            num--;
-                        }
-                        out.writeUTF("done");
-                        out.flush();
+                        Vertex v = (Vertex) in.readObject();
+                        GraphServer.graph.put(v.ID, v);
+                        GraphServer.incoming.put(v.ID, new ArrayList<>());
                         break;
                     }
-                    case "neighbor info": {
+                    case "NEIGHBOR_INFO": {
 
                         GraphServer.partition = new HashMap<>();
                         GraphServer.outgoing = new HashMap<>();
 
-                        int neighbor = in.readInt();
-
                         // build partition information
-                        while (neighbor > 0) {
-                            GraphServer.partition.put(in.readInt(), in.readUTF());
-                            neighbor--;
+                        GraphServer.partition = (HashMap<Integer, String>) in.readObject();
+                        for (int i : GraphServer.partition.keySet()) {
+                            GraphServer.partition.put(i, GraphServer.partition.get(i).split("#")[1]);
                         }
 
                         // build outgoing list
@@ -73,58 +64,62 @@ public class GraphServerThread extends Thread {
 
                         GraphServer.isInitialized = true;
                         GraphServer.iterationDone = true;
-                        out.writeUTF("done");
+                        out.writeUTF("DONE");
                         out.flush();
                         break;
                     }
-                    case "delete": {
-                        int num = in.readInt();
-
-                        List<Integer> deleteList = new ArrayList<>(num);
+                    case "DELETE": {
 
                         // build local graph
-                        while (num > 0) {
-                            int id = in.readInt();
-                            out.writeDouble(GraphServer.graph.get(id).value);
-                            deleteList.add(id);
-                            num--;
+                        int id = in.readInt();
+                        out.writeObject(GraphServer.graph.get(id));
+
+                        if (in.readUTF().equals("DONE")) {
+                            GraphServer.graph.remove(id);
+                            GraphServer.incoming.remove(id);
                         }
-                        out.writeUTF("done");
-                        if (in.readUTF().equals("done")) {
-                            for (int id : deleteList) {
-                                GraphServer.graph.remove(id);
-                                GraphServer.incoming.remove(id);
-                            }
-                        }
-                        out.writeUTF("done");
                         break;
                     }
-                    case "init": {
+                    case "SSSP": {
+
+                        GraphServer.iterationDone = false;
+                        GraphServer.isInitialized = false;
+                        GraphServer.isPageRank = false;
+                        GraphServer.graph = new HashMap<>();
+                        GraphServer.incoming = new HashMap<>();
+                        GraphServer.gatherCount = 0;
+                        in.readInt();
+                        GraphServer.iterationDone = true;
+
+                        out.writeUTF("DONE");
+                        out.flush();
+
+                        break;
+                    }
+                    case "PAGERANK": {
 
                         // TODO
                         GraphServer.iterationDone = false;
                         GraphServer.isInitialized = false;
-                        // init PageRank alpha N iterations
-                        // init SSSP iterations
                         GraphServer.graph = new HashMap<>();
                         GraphServer.incoming = new HashMap<>();
                         GraphServer.gatherCount = 0;
 
-                        String function = in.readUTF();
-                        GraphServer.isPageRank = function.equals("PageRank");
-
-                        if (GraphServer.isPageRank) {
-                            GraphServer.damping = in.readDouble();
-                            GraphServer.N = in.readInt();
+                        int num = in.readInt();
+                        GraphServer.damping = in.readDouble();
+                        if (num > 1) {
+                            GraphServer.threshold = in.readInt();
+                        } else {
+                            GraphServer.threshold = 0;
                         }
-
                         GraphServer.iterationDone = true;
 
-                        out.writeUTF("done");
+                        out.writeUTF("DONE");
                         out.flush();
+
                         break;
                     }
-                    case "iter": {
+                    case "ITERATION": {
 
                         GraphServer.iterationDone = false;
                         GraphServer.gatherCount = 0;
@@ -138,7 +133,7 @@ public class GraphServerThread extends Thread {
                                     for (double value : GraphServer.incoming.get(i)) {
                                         pr += value * GraphServer.damping;
                                     }
-                                    if (GraphServer.isFinish && GraphServer.graph.get(i).value != pr)
+                                    if (GraphServer.isFinish && Math.abs(GraphServer.graph.get(i).value - pr) > GraphServer.threshold)
                                         GraphServer.isFinish = false;
                                     GraphServer.graph.get(i).value = pr;
                                 }
@@ -171,9 +166,9 @@ public class GraphServerThread extends Thread {
                         }
 
                         if (GraphServer.isFinish)
-                            out.writeUTF("finish");
+                            out.writeUTF("HALT");
                         else
-                            out.writeUTF("done");
+                            out.writeUTF("DONE");
                         out.flush();
                         break;
                     }
@@ -192,15 +187,13 @@ public class GraphServerThread extends Thread {
                         GraphServer.gatherCount++;
                         return;
                     }
-                    case "finish": {
+                    case "TERMINATE": {
                         out.writeInt(GraphServer.graph.size());
                         out.flush();
                         for (Vertex v : GraphServer.graph.values()) {
                             out.writeInt(v.ID);
                             out.writeDouble(v.value);
                         }
-                        out.writeUTF("done");
-                        out.flush();
                         return;
                     }
                     case "new Master": {
@@ -212,9 +205,9 @@ public class GraphServerThread extends Thread {
                             while (!GraphServer.iterationDone) {
                             }
                             if (GraphServer.isFinish)
-                                out.writeUTF("finish");
+                                out.writeUTF("HALT");
                             else {
-                                out.writeUTF("done");
+                                out.writeUTF("DONE");
                             }
                         }
                     }

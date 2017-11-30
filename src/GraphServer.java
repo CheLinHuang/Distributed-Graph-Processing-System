@@ -16,21 +16,22 @@ public class GraphServer {
     static boolean needResend = false;
     static boolean isPageRank = false;
     static double damping;
+    static double threshold;
     static int N;
 
-    //public static void main(String[] args) {
-    public void run() {
+    public static void main(String[] args) {
+    //public void run() {
         boolean listening = true;
 
         // Keep listening for incoming file related request
-        try (ServerSocket serverSocket = new ServerSocket(Daemon.graphPortNumber)) {
+        try (ServerSocket serverSocket = new ServerSocket(12345)) {
 
             // Accept socket connection and create new thread
             while (listening)
                 new GraphServerThread(serverSocket.accept()).start();
 
         } catch (Exception e) {
-            System.err.println("Could not listen to port " + Daemon.graphPortNumber);
+            System.err.println("Could not listen to port " + 12345);
             System.exit(-1);
         }
     }

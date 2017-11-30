@@ -146,8 +146,10 @@ public class GraphServerThread extends Thread {
                         synchronized (GraphServer.incoming) {
                             if (GraphServer.isPageRank) {
                                 for (int i : GraphServer.graph.keySet()) {
+                                    System.out.println("calculate id: " + i);
                                     double pr = (1 - GraphServer.damping);
                                     for (double value : GraphServer.incoming.get(i)) {
+                                        System.out.println("income value " + value);
                                         pr += value * GraphServer.damping;
                                     }
                                     if (GraphServer.isFinish && Math.abs(GraphServer.graph.get(i).value - pr) > GraphServer.threshold)
@@ -180,6 +182,12 @@ public class GraphServerThread extends Thread {
 
                         // gather
                         while (GraphServer.gatherCount < GraphServer.vms) {
+                            try {
+                                Thread.sleep(500);
+                            } catch (Exception e) {
+
+                            }
+                            System.out.println("line183");
                         }
 
                         System.out.println("iteration done");
@@ -193,16 +201,33 @@ public class GraphServerThread extends Thread {
                     }
                     case "put": {
 
-                        HashMap<Integer, List<Double>> e = (HashMap<Integer, List<Double>>) in.readObject();
+                        System.out.println("put from " + socket.getRemoteSocketAddress());
 
+                        HashMap<Integer, List<Double>> e = (HashMap<Integer, List<Double>>) in.readObject();
+                        out.writeUTF("done");
+                        out.flush();
+                        System.out.println("get hashmap size " + e.size());
                         System.out.println("GraphServer.iterationDone :" + GraphServer.iterationDone);
 
                         while (!GraphServer.iterationDone) {
+                            try {
+                                Thread.sleep(500);
+                            } catch (Exception ee) {
+
+                            }
+                            System.out.println("line204");
                         }
                         for (Map.Entry<Integer, List<Double>> entry : e.entrySet()) {
+                            System.out.println("Inserting value" + entry.getKey());
+                            for (double d : entry.getValue())
+                                System.out.print(d + " ");
+                            System.out.println();
                             GraphServer.incoming.get(entry.getKey()).addAll(entry.getValue());
                         }
                         GraphServer.gatherCount++;
+
+                        System.out.println("GraphServer.gatherCount :" + GraphServer.gatherCount);
+
                         return;
                     }
                     case "TERMINATE": {
@@ -258,6 +283,10 @@ public class GraphServerThread extends Thread {
                     } else {
                         list.add(v.value);
                     }
+                    System.out.println("out going value " + i);
+                    for (double d : list)
+                        System.out.print(d + " ");
+                    System.out.println();
                     if (!GraphServer.outgoing.get(GraphServer.partition.get(i)).containsKey(i))
                         GraphServer.outgoing.get(GraphServer.partition.get(i)).put(i, list);
                 }
@@ -266,16 +295,23 @@ public class GraphServerThread extends Thread {
 
         int[] putCount = {0};
         for (Map.Entry<String, HashMap<Integer, List<Double>>> e : GraphServer.outgoing.entrySet()) {
+            System.out.println("Pushing " + e.getKey());
             Thread t = new SendGraph(e.getKey(), e.getValue(), putCount);
             t.start();
+        }
+
+        while (putCount[0] != GraphServer.vms) {
+            try {
+                Thread.sleep(500);
+            } catch (Exception e) {
+
+            }
+            System.out.println("line287");
         }
 
         // clear outgoing info
         for (String s : GraphServer.outgoing.keySet()) {
             GraphServer.outgoing.get(s).clear();
-        }
-        System.out.println("Pushing");
-        while (putCount[0] != GraphServer.vms) {
         }
     }
 
@@ -293,11 +329,14 @@ public class GraphServerThread extends Thread {
 
         public void run() {
             try (Socket socket = new Socket(target, Daemon.graphPortNumber);
-                 ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())
+                 ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+                 ObjectInputStream in = new ObjectInputStream(socket.getInputStream())
             ) {
                 out.writeUTF("put");
                 out.flush();
+                System.out.println("put hashmap size " + map.size());
                 out.writeObject(map);
+                in.readUTF();
 
             } catch (Exception e) {
                 e.printStackTrace();

@@ -23,12 +23,10 @@ public class GraphServerThread extends Thread {
                 ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
                 ObjectInputStream in = new ObjectInputStream(socket.getInputStream())
         ) {
-
             while (true) {
 
                 operation = in.readUTF();
                 System.out.println(operation);
-
 
                 switch (operation) {
                     case "ADD": {
@@ -37,6 +35,9 @@ public class GraphServerThread extends Thread {
                         Vertex v = (Vertex) in.readObject();
                         GraphServer.graph.put(v.ID, v);
                         GraphServer.incoming.put(v.ID, new ArrayList<>());
+
+                        System.out.println("Add vertex " + v.ID);
+
                         break;
                     }
                     case "NEIGHBOR_INFO": {
@@ -49,7 +50,7 @@ public class GraphServerThread extends Thread {
                         for (int i : GraphServer.partition.keySet()) {
                             GraphServer.partition.put(i, GraphServer.partition.get(i).split("#")[1]);
                         }
-
+                        System.out.println("get neighbor");
                         // build outgoing list
                         for (String s : GraphServer.partition.values()) {
                             if (!GraphServer.outgoing.containsKey(s)) {
@@ -72,8 +73,8 @@ public class GraphServerThread extends Thread {
 
                         // build local graph
                         int id = in.readInt();
+                        System.out.println("Delete vertex " + id);
                         out.writeObject(GraphServer.graph.get(id));
-
                         if (in.readUTF().equals("DONE")) {
                             GraphServer.graph.remove(id);
                             GraphServer.incoming.remove(id);
@@ -88,7 +89,8 @@ public class GraphServerThread extends Thread {
                         GraphServer.graph = new HashMap<>();
                         GraphServer.incoming = new HashMap<>();
                         GraphServer.gatherCount = 0;
-                        in.readInt();
+
+                        System.out.println("# of param " + in.readInt());
                         GraphServer.iterationDone = true;
 
                         out.writeUTF("DONE");
@@ -106,9 +108,12 @@ public class GraphServerThread extends Thread {
                         GraphServer.gatherCount = 0;
 
                         int num = in.readInt();
+                        System.out.println("# of param " + num);
                         GraphServer.damping = in.readDouble();
+                        System.out.println("Get damping " + GraphServer.damping);
                         if (num > 1) {
-                            GraphServer.threshold = in.readInt();
+                            GraphServer.threshold = in.readDouble();
+                            System.out.println("Get threshold " + GraphServer.threshold);
                         } else {
                             GraphServer.threshold = 0;
                         }
@@ -192,7 +197,9 @@ public class GraphServerThread extends Thread {
                         out.flush();
                         for (Vertex v : GraphServer.graph.values()) {
                             out.writeInt(v.ID);
+                            out.flush();
                             out.writeDouble(v.value);
+                            out.flush();
                         }
                         return;
                     }

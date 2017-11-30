@@ -110,6 +110,51 @@ public class MasterThreadHelper {
      * Below methods are for graph processing
      ****************************************/
 
+    public static void saveResults(
+            List<String> results, String sdfsFileName) throws Exception {
+
+        List<String> outTgtNodes =
+                Hash.getTargetNode(Hash.hashing(sdfsFileName, 8));
+
+        List<Socket> outSkts = new ArrayList<>();
+        List<DataInputStream> outSktIns = new ArrayList<>();
+        List<DataOutputStream> outSktOuts = new ArrayList<>();
+
+        for (String outTgtNode: outTgtNodes) {
+            Socket skt = new Socket(
+                    outTgtNode.split("#")[1], Daemon.filePortNumber);
+            outSkts.add(skt);
+            outSktIns.add(new DataInputStream(skt.getInputStream()));
+            outSktOuts.add(new DataOutputStream(skt.getOutputStream()));
+        }
+
+        String totalResults = "";
+        for (String s: results)
+            totalResults += s + '\n';
+
+        System.out.println(totalResults);
+        byte[] bytes = totalResults.getBytes();
+
+        for (DataOutputStream out: outSktOuts) {
+            out.writeUTF("PUT REPLICA");
+            out.writeUTF(sdfsFileName);
+            out.writeUTF("KEEP");
+            out.writeLong(1);
+            out.writeLong(bytes.length);
+        }
+
+        byte[] buffer = new byte[Daemon.bufferSize];
+        for (int i = 0; i * Daemon.bufferSize < bytes.length; i++) {
+            int readBytes = Math.min(Daemon.bufferSize, bytes.length - i * Daemon.bufferSize);
+            System.arraycopy(bytes, i * Daemon.bufferSize, buffer, 0, readBytes);
+            for (DataOutputStream out: outSktOuts)
+                out.write(buffer, 0, readBytes);
+        }
+
+        for (DataInputStream in: outSktIns)
+            in.readUTF();
+    }
+
     public static List<String> getBackupMasters() {
 
         List<String> res = new ArrayList<>();

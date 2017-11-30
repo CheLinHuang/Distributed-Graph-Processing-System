@@ -555,32 +555,14 @@ public class MasterThread extends Thread {
                                         }
                                     }
                                     Collections.sort(results);
+
+                                    // save the results in the SDFS
+                                    MasterThreadHelper.saveResults(results, Master.taskInfo.get(4));
+
                                     for (String s: results)
                                         System.out.println(s);
-                                    /*
-                                    // save the file into the SDFS
-                                    String outputFileName = Master.taskInfo.get(4);
-                                    List<String> outTgtNodes =
-                                            Hash.getTargetNode(Hash.hashing(outputFileName, 8));
 
-                                    List<Socket> outSkts = new ArrayList<>();
-                                    List<DataInputStream> outSktIns = new ArrayList<>();
-                                    List<DataOutputStream> outSktOuts = new ArrayList<>();
-
-                                    for (String outTgtNode: outTgtNodes) {
-                                        Socket skt = new Socket(
-                                                outTgtNode.split("#")[1], Daemon.filePortNumber);
-                                        outSkts.add(skt);
-                                        outSktIns.add(new DataInputStream(skt.getInputStream()));
-                                        outSktOuts.add(new DataOutputStream(skt.getOutputStream()));
-                                    }
-
-                                    for (DataOutputStream out: outSktOuts) {
-                                        out.writeUTF("PUT REPLICA");
-                                        out.writeUTF(outputFileName);
-                                        out.writeUTF("KEEP");
-                                    }*/
-                                    // clear the graph
+                                    // clear the temp file for the graph task
                                     Master.clearGraphTask();
                                     // leave the while loop
                                     break;

@@ -17,7 +17,6 @@ public class GraphServer extends Thread {
     static boolean isPageRank = false;
     static double damping;
     static double threshold;
-    static int N;
 
     //public static void main(String[] args) {
     public void run() {

@@ -14,10 +14,11 @@ public class GraphServer {
     static boolean isFinish = false;
     static boolean isInitialized = false;
     static boolean needResend = false;
-    static boolean isPageRank;
+    static boolean isPageRank = false;
     static double damping;
     static int N;
 
+    //public static void main(String[] args) {
     public void run() {
         boolean listening = true;
 

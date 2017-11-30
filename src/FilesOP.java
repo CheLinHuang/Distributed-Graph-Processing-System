@@ -1,13 +1,92 @@
 import java.io.*;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.util.*;
 
 public class FilesOP {
 
     public static void main(String[] args) {
-        for (Map.Entry<Integer, Vertex> e : readFiles(new File("com-amazon.ungraph.txt")).entrySet()) {
-            System.out.println(e.getKey());
-            System.out.println(e.getValue());
+        try {
+
+            long time1 = System.currentTimeMillis();
+
+            System.out.println(InetAddress.getLocalHost().getHostName());
+            Socket socket = new Socket(InetAddress.getLocalHost().getHostName(), 12345);
+            ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+            ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
+
+            HashMap<Integer, Vertex> hm = readFiles(new File("../com-amazon.ungraph.txt"));
+
+            for (int i : hm.keySet()) {
+                hm.get(i).value = 1.0; // / hm.size();
+            }
+
+            System.out.println("Done init");
+
+            out.writeUTF("init");
+            out.flush();
+            out.writeUTF("PageRank");
+            out.flush();
+            out.writeDouble(0.85);
+            out.flush();
+            out.writeInt(hm.size());
+            out.flush();
+            System.out.println(in.readUTF());
+
+            time1 = System.currentTimeMillis() - time1;
+
+            out.writeUTF("add");
+            out.flush();
+            out.writeInt(hm.size());
+            out.flush();
+            for (Vertex e : hm.values()) {
+                out.writeObject(e);
+            }
+            out.flush();
+            System.out.println(in.readUTF());
+
+            long time = System.currentTimeMillis();
+
+            out.writeUTF("neighbor info");
+            out.flush();
+            out.writeInt(0);
+            out.flush();
+            System.out.println(in.readUTF());
+
+
+            int it = 20;
+            while (it > 0) {
+                out.writeUTF("iter");
+                out.flush();
+                it--;
+                System.out.println(in.readUTF());
+            }
+
+            out.writeUTF("finish");
+            out.flush();
+
+            int num = in.readInt();
+            System.out.println(num);
+
+            List<String> list = new ArrayList<>();
+            while (num > 0) {
+                int numm = in.readInt();
+                double d = in.readDouble();
+                Formatter ff = new Formatter();
+                //list.add(numm + "," + ff.format("%.5f", d));
+                list.add(numm + "," + d);
+                num--;
+            }
+            Collections.sort(list);
+            File f = new File("result.txt");
+            PrintWriter fs = new PrintWriter(f);
+            for (String s : list)
+                fs.println(s);
+            fs.close();
+            System.out.println(System.currentTimeMillis() - time + time1) ;
+
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
@@ -49,17 +128,24 @@ public class FilesOP {
                 int vertex1 = Integer.parseInt(vertex[0]);
                 int vertex2 = Integer.parseInt(vertex[1]);
                 Vertex v = graph.getOrDefault(vertex1, new Vertex(vertex1));
+                if (vertex1 == 1)
+                    v.value = 0;
+                else
+                    v.value = Double.MAX_VALUE;
                 v.neighbors.add(vertex2);
                 if (!graph.containsKey(vertex1)) {
                     graph.put(vertex1, v);
                 }
 
                 // If undirected graph
-//                list = graph.getOrDefault(vertex2, new ArrayList<>());
-//                list.add(vertex1);
-//                if (!graph.containsKey(vertex2)) {
-//                    graph.put(vertex2, list);
-//                }
+                Vertex v2 = graph.getOrDefault(vertex2, new Vertex(vertex2));
+                if (vertex2 == 1)
+                    v2.value = 0;
+                else
+                    v2.value = Double.MAX_VALUE;
+                if (!graph.containsKey(vertex2)) {
+                    graph.put(vertex2, v2);
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();

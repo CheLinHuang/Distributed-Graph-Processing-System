@@ -27,6 +27,8 @@ public class GraphServerThread extends Thread {
             while (true) {
 
                 operation = in.readUTF();
+                System.out.println(operation);
+
 
                 switch (operation) {
                     case "add": {
@@ -41,6 +43,7 @@ public class GraphServerThread extends Thread {
                             num--;
                         }
                         out.writeUTF("done");
+                        out.flush();
                         break;
                     }
                     case "neighbor info": {
@@ -71,18 +74,27 @@ public class GraphServerThread extends Thread {
                         GraphServer.isInitialized = true;
                         GraphServer.iterationDone = true;
                         out.writeUTF("done");
+                        out.flush();
                         break;
                     }
                     case "delete": {
                         int num = in.readInt();
 
+                        List<Integer> deleteList = new ArrayList<>(num);
+
                         // build local graph
                         while (num > 0) {
                             int id = in.readInt();
                             out.writeDouble(GraphServer.graph.get(id).value);
-                            GraphServer.graph.remove(id);
-                            GraphServer.incoming.remove(id);
+                            deleteList.add(id);
                             num--;
+                        }
+                        out.writeUTF("done");
+                        if (in.readUTF().equals("done")) {
+                            for (int id : deleteList) {
+                                GraphServer.graph.remove(id);
+                                GraphServer.incoming.remove(id);
+                            }
                         }
                         out.writeUTF("done");
                         break;
@@ -91,7 +103,7 @@ public class GraphServerThread extends Thread {
 
                         // TODO
                         GraphServer.iterationDone = false;
-
+                        GraphServer.isInitialized = false;
                         // init PageRank alpha N iterations
                         // init SSSP iterations
                         GraphServer.graph = new HashMap<>();
@@ -109,6 +121,7 @@ public class GraphServerThread extends Thread {
                         GraphServer.iterationDone = true;
 
                         out.writeUTF("done");
+                        out.flush();
                         break;
                     }
                     case "iter": {
@@ -121,7 +134,7 @@ public class GraphServerThread extends Thread {
                         synchronized (GraphServer.incoming) {
                             if (GraphServer.isPageRank) {
                                 for (int i : GraphServer.graph.keySet()) {
-                                    double pr = (1 - GraphServer.damping) / (double) GraphServer.N;
+                                    double pr = (1 - GraphServer.damping);
                                     for (double value : GraphServer.incoming.get(i)) {
                                         pr += value * GraphServer.damping;
                                     }
@@ -161,6 +174,7 @@ public class GraphServerThread extends Thread {
                             out.writeUTF("finish");
                         else
                             out.writeUTF("done");
+                        out.flush();
                         break;
                     }
                     case "put": {
@@ -180,12 +194,13 @@ public class GraphServerThread extends Thread {
                     }
                     case "finish": {
                         out.writeInt(GraphServer.graph.size());
+                        out.flush();
                         for (Vertex v : GraphServer.graph.values()) {
                             out.writeInt(v.ID);
                             out.writeDouble(v.value);
                         }
-                        GraphServer.isInitialized = false;
                         out.writeUTF("done");
+                        out.flush();
                         return;
                     }
                     case "new Master": {

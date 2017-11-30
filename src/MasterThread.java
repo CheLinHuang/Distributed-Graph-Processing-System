@@ -508,6 +508,7 @@ public class MasterThread extends Thread {
                                         // worker list unchanged, do nothing
                                         break;
                                 }
+                                System.out.println("ITERATION " + Master.iteration);
                                 // partition done, start this iteration
                                 for (ObjectOutputStream out: workerOuts) {
                                     out.writeUTF("ITERATION");
@@ -584,6 +585,7 @@ public class MasterThread extends Thread {
                                 // since we will check worker status at the beginning of each iteration
                                 // we don't need to do any exception handling
                                 System.out.println("In exception");
+                                Master.workers = "";
                                 try {
                                     Thread.sleep(1000);
                                 } catch (InterruptedException ie) {

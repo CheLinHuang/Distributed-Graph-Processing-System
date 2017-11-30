@@ -11,7 +11,7 @@ public class Master extends Thread {
     static Map<String, List<String>> fileReplica = new HashMap<>();
     // metadata for the graph processing task in SAVA
     static List<String> taskInfo = new ArrayList<>();
-    static Integer iteration = -1;
+    static Integer iteration = 1;
     static String workers = "";
     static Map<Integer, Vertex> graph = new HashMap<>();
     static Map<Integer, String> partition = new HashMap<>();

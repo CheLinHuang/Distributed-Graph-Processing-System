@@ -459,18 +459,23 @@ public class MasterThread extends Thread {
                                             map.put(worker, i);
                                             reversedMap.put(i, worker);
                                         }
-
+                                        System.out.println("Before Send");
                                         for (ObjectOutputStream out: workerOuts) {
+                                            System.out.println(Master.taskInfo.get(1).toUpperCase());
                                             out.writeUTF(Master.taskInfo.get(1).toUpperCase());
                                             out.flush();
+                                            System.out.println((isIteration? 0: 1) +
+                                                    (Master.taskInfo.get(1).equals("pagerank")? 1: 0));
                                             out.writeInt((isIteration? 0: 1) +
                                                     (Master.taskInfo.get(1).equals("pagerank")? 1: 0));
                                             // send the damping factor to workers
                                             if(Master.taskInfo.get(1).equals("pagerank")) {
+                                                System.out.println(Double.parseDouble(Master.taskInfo.get(2)));
                                                 out.writeDouble(Double.parseDouble(Master.taskInfo.get(2)));
                                                 out.flush();
                                             }
                                             if(!isIteration) {
+                                                System.out.println(Double.parseDouble(terminateCondition));
                                                 out.writeDouble(Double.parseDouble(terminateCondition));
                                                 out.flush();
                                             }

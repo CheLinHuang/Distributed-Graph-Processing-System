@@ -131,7 +131,10 @@ public class MasterThreadHelper {
             1 stands for repartitioning (worker rejoin)
             2 stands for do nothing
          */
-        if (Master.workers.length() == 0) return 0;
+
+        boolean initialized = true;
+        if (Master.workers.length() == 0)
+            initialized = false;
 
         boolean newWorkerAdded = false;
         boolean oldWorkerFailed = false;
@@ -158,7 +161,7 @@ public class MasterThreadHelper {
                 Master.workers = workers;
             }
         }
-        return oldWorkerFailed? 0: (newWorkerAdded? 1: 2);
+        return (oldWorkerFailed || !initialized)? 0: (newWorkerAdded? 1: 2);
     }
 
     public static void graphPartition(

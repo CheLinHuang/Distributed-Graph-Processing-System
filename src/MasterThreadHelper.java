@@ -149,13 +149,12 @@ public class MasterThreadHelper {
                     String nodeID = Daemon.hashValues.get(key);
                     if (!nodeID.equals(clientID) && !Daemon.masterList.containsKey(nodeID)) {
                         workers += (nodeID + "_");
-                        if (nodeID.indexOf(Master.workers) == -1)
+                        if (Master.workers.indexOf(nodeID) == -1)
                             newWorkerAdded = true;
                     }
                 }
-                // workers = workers.substring(0, workers.length() - 1);
                 for (String oldWorker : Master.workers.split("_")) {
-                    if (oldWorker.indexOf(workers) == -1)
+                    if (workers.indexOf(oldWorker) == -1)
                         oldWorkerFailed = true;
                 }
                 Master.workers = workers;

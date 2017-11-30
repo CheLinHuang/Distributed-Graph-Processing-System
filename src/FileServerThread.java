@@ -93,6 +93,10 @@ public class FileServerThread extends Thread {
                     else sktOutput.writeUTF("FILE_NOT_FOUND");
                     break;
                 }
+                case "SAVA": {
+                    System.out.println("Graph computing task completed!");
+                    System.out.println("The result is stored as " + sdfsfilename + " in the SDFS.");
+                }
             }
             //release the resource
             socket.close();

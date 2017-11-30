@@ -559,9 +559,12 @@ public class MasterThread extends Thread {
 
                                     // save the results in the SDFS
                                     MasterThreadHelper.saveResults(results, Master.taskInfo.get(4));
-
-                                    for (String s: results)
-                                        System.out.println(s);
+                                    // notify client that the computation is done
+                                    Socket clientSkt = new Socket(
+                                            Master.taskInfo.get(0).split("#")[1], Daemon.filePortNumber);
+                                    DataOutputStream out = new DataOutputStream(clientSkt.getOutputStream());
+                                    out.writeUTF("SAVA");
+                                    out.writeUTF(Master.taskInfo.get(4));
 
                                     // clear the temp file for the graph task
                                     Master.clearGraphTask();
@@ -585,6 +588,7 @@ public class MasterThread extends Thread {
                         toc = System.currentTimeMillis();
                         System.out.println(
                                 "Processing time for graph computing: " + (toc - tic) / 1000. + "(sec)");
+
                     }
                 }
                 System.out.println(Master.jobQueue.peek() + " completed!");

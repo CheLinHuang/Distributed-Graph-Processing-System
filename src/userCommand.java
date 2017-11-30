@@ -287,7 +287,7 @@ public class userCommand {
             localGraphFile = temp[temp.length - 1];
             System.out.println(localGraphFile);
         }
-        
+
         // input is valid, starts to put the graph into the SDFS
         String outputFile = cmdParts[cmdParts.length - 1];
         params.add(outputFile);

@@ -128,11 +128,12 @@ public class MasterThreadHelper {
             outSktOuts.add(new DataOutputStream(skt.getOutputStream()));
         }
 
+        System.out.println("Saving the results to " + sdfsFileName);
+        // for debugging
         String totalResults = "";
         for (String s: results)
             totalResults += s + '\n';
 
-        System.out.println(totalResults);
         byte[] bytes = totalResults.getBytes();
 
         for (DataOutputStream out: outSktOuts) {
@@ -142,6 +143,8 @@ public class MasterThreadHelper {
             out.writeLong(1);
             out.writeLong(bytes.length);
         }
+        
+        System.out.println("QQ");
 
         byte[] buffer = new byte[Daemon.bufferSize];
         for (int i = 0; i * Daemon.bufferSize < bytes.length; i++) {

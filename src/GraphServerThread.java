@@ -170,6 +170,8 @@ public class GraphServerThread extends Thread {
                         while (GraphServer.gatherCount < GraphServer.vms) {
                         }
 
+                        System.out.println("iteration done");
+
                         if (GraphServer.isFinish)
                             out.writeUTF("HALT");
                         else
@@ -178,17 +180,13 @@ public class GraphServerThread extends Thread {
                         break;
                     }
                     case "put": {
-                        int num = in.readInt();
 
+                        HashMap<Integer, List<Double>> e = (HashMap<Integer, List<Double>>) in.readObject();
                         while (!GraphServer.iterationDone) {
                         }
-
-                        while (num > 0) {
-                            Map.Entry<Integer, List<Double>> e = (Map.Entry<Integer, List<Double>>) in.readObject();
-                            GraphServer.incoming.get(e.getKey()).addAll(e.getValue());
-                            num--;
+                        for (Map.Entry<Integer, List<Double>> entry : e.entrySet()) {
+                            GraphServer.incoming.get(entry.getKey()).addAll(entry.getValue());
                         }
-
                         GraphServer.gatherCount++;
                         return;
                     }
@@ -283,9 +281,9 @@ public class GraphServerThread extends Thread {
                  ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())
             ) {
                 out.writeUTF("put");
-                out.writeInt(map.size());
-                for (Map.Entry<Integer, List<Double>> e : map.entrySet())
-                    out.writeObject(e);
+                out.flush();
+                out.writeObject(map);
+
             } catch (Exception e) {
                 e.printStackTrace();
             }

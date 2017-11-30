@@ -114,6 +114,7 @@ public class GraphServerThread extends Thread {
                         // TODO
                         GraphServer.iterationDone = false;
                         GraphServer.isInitialized = false;
+                        GraphServer.isPageRank = true;
                         GraphServer.graph = new HashMap<>();
                         GraphServer.incoming = new HashMap<>();
                         GraphServer.gatherCount = 0;

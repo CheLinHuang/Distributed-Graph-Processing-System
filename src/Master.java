@@ -35,11 +35,11 @@ public class Master extends Thread {
         }
     }
 
-    public void clearGraphTask() {
+    public static void clearGraphTask() {
         taskInfo.clear();
         graph.clear();
         partition.clear();
-        iteration = -1;
+        iteration = 1;
         workers = "";
     }
 }

@@ -9,7 +9,7 @@ public class MasterSyncThread extends Thread {
         System.out.println("MasterSyncThread established");
         while (true) {
             try{
-                Thread.sleep(2000);
+                Thread.sleep(10000);
             } catch (InterruptedException e) {
                 // do nothing
             }

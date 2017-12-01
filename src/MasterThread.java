@@ -449,6 +449,7 @@ public class MasterThread extends Thread {
                                 switch (status) {
                                     case 0: {
                                         // some workers fail, restart the task
+                                        long ptic = System.currentTimeMillis();
                                         Master.iteration = 1;
                                         workerSkts.clear();
                                         workerOuts.clear();
@@ -487,11 +488,16 @@ public class MasterThread extends Thread {
                                             in.readUTF();
                                         }
                                         MasterThreadHelper.graphPartition(workerIns, workerOuts, map, reversedMap);
+                                        long ptoc = System.currentTimeMillis();
+                                        System.out.println(
+                                                "Processing time for graph partitioning: "
+                                                        + (ptoc - ptic) / 1000. + " (sec)");
                                         break;
                                     }
                                     case 1: {
                                         // some workers rejoin, re-partition the task
                                         // and create new socket to new workers
+                                        long ptic = System.currentTimeMillis();
                                         String[] workers = Master.workers.split("_");
                                         for (int i = 0; i < workers.length; i++) {
                                             String worker = workers[i];
@@ -506,12 +512,17 @@ public class MasterThread extends Thread {
                                             }
                                         }
                                         MasterThreadHelper.graphPartition(workerIns, workerOuts, map, reversedMap);
+                                        long ptoc = System.currentTimeMillis();
+                                        System.out.println(
+                                                "Processing time for graph partitioning: "
+                                                        + (ptoc - ptic) / 1000. + " (sec)");
                                         break;
                                     }
                                     case 2:
                                         // worker list unchanged, do nothing
                                         break;
                                 }
+
                                 System.out.println("ITERATION " + Master.iteration);
                                 // partition done, start this iteration
                                 for (ObjectOutputStream out: workerOuts) {
@@ -525,7 +536,7 @@ public class MasterThread extends Thread {
                                         haltCount ++;
                                 }
 
-                                Master.iteration ++;
+
                                 // if all workers vote to halt or reaches the iteration upper limit
                                 // terminate the task and store the results in the SDFS
 
@@ -571,6 +582,7 @@ public class MasterThread extends Thread {
                                     // leave the while loop
                                     break;
                                 }
+                                Master.iteration ++;
 
                             } catch (Exception e) {
                                 // e captures the case that during partition, some workers fails

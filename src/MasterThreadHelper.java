@@ -130,29 +130,39 @@ public class MasterThreadHelper {
 
         System.out.println("Saving the results to " + sdfsFileName);
         // for debugging
-        String totalResults = "";
-        for (String s: results)
-            totalResults += s + '\n';
-
-        byte[] bytes = totalResults.getBytes();
+        int byteCount = 0;
+        List<byte[]> resultBytes = new ArrayList<>();
+        for (String s: results) {
+            byte[] temp = (s + "\n").getBytes();
+            resultBytes.add(temp);
+            byteCount += temp.length;
+        }
 
         for (DataOutputStream out: outSktOuts) {
             out.writeUTF("PUT REPLICA");
             out.writeUTF(sdfsFileName);
             out.writeUTF("KEEP");
             out.writeLong(1);
-            out.writeLong(bytes.length);
+            out.writeLong(byteCount);
         }
-        
-        System.out.println("QQ");
 
-        byte[] buffer = new byte[Daemon.bufferSize];
-        for (int i = 0; i * Daemon.bufferSize < bytes.length; i++) {
-            int readBytes = Math.min(Daemon.bufferSize, bytes.length - i * Daemon.bufferSize);
-            System.arraycopy(bytes, i * Daemon.bufferSize, buffer, 0, readBytes);
-            for (DataOutputStream out: outSktOuts)
-                out.write(buffer, 0, readBytes);
+        byte[] remainedBytes = {};
+        for (byte[] bytes: resultBytes) {
+            byte[] combinedBytes = new byte[remainedBytes.length + bytes.length];
+            System.arraycopy(
+                    remainedBytes, 0, combinedBytes, 0, remainedBytes.length);
+            System.arraycopy(
+                    bytes, 0, combinedBytes, remainedBytes.length, bytes.length);
+
+            if (combinedBytes.length >= Daemon.bufferSize) {
+                for (DataOutputStream out: outSktOuts)
+                    out.write(combinedBytes, 0, Daemon.bufferSize);
+                remainedBytes = Arrays.copyOfRange(combinedBytes, Daemon.bufferSize, combinedBytes.length);
+
+            } else remainedBytes = combinedBytes;
         }
+        for (DataOutputStream out: outSktOuts)
+            out.write(remainedBytes, 0, remainedBytes.length);
 
         for (DataInputStream in: outSktIns)
             in.readUTF();

@@ -27,14 +27,22 @@ public class userCommand {
             boolean forceWrite = false;
             while (true) {
                 try {
-                    sendFile("PUT", new ArrayList<>(), file, tgtFileName, forceWrite);
+                    Socket socket = new Socket(
+                            Daemon.master.split("#")[1], Daemon.masterPortNumber);
+                    DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
+                    DataInputStream dis = new DataInputStream(socket.getInputStream());
+
+                    sendFile(dos, dis,"PUT",
+                            new ArrayList<>(), file, tgtFileName, forceWrite);
                     // if the file is successfully sent, break the while loop
                     break;
                 } catch (Exception e) {
                     // if exception occurs, wait for a while and resend the file
+                    if (Daemon.masterList.size() == 0) break;
+                    System.out.println("Master failed, re-connecting to backup master...");
                     forceWrite = true;
                     try {
-                        Thread.sleep(1000);
+                        Thread.sleep(2500);
                     } catch (InterruptedException ex) {
                         // do nothing
                     }
@@ -44,13 +52,15 @@ public class userCommand {
     }
 
     public static void sendFile(
+            DataOutputStream dos,
+            DataInputStream dis,
             String operation, List<String> extraInfo,
             File srcFile, String tgtFileName, boolean forceWrite) throws Exception {
 
-        Socket socket = new Socket(
+        /*Socket socket = new Socket(
                 Daemon.master.split("#")[1], Daemon.masterPortNumber);
         DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
-        DataInputStream in = new DataInputStream(socket.getInputStream());
+        DataInputStream in = new DataInputStream(socket.getInputStream());*/
         dos.writeUTF(operation);
         dos.writeUTF(tgtFileName);
         // extraInfo contains additional information about graph
@@ -59,13 +69,13 @@ public class userCommand {
             for (String info : extraInfo)
                 dos.writeUTF(info);
         }
-        String response = in.readUTF();
+        String response = dis.readUTF();
         DaemonHelper.writeLog("Server response", response);
 
         //Thread t = null;
         if (response.equals("ACCEPT") || forceWrite) {
             // Accept the put file request
-            FilesOP.sendFile2(srcFile, socket);
+            FilesOP.sendFile(dos, srcFile);
 
         } else if (response.equals("CONFIRM")) {
 
@@ -92,7 +102,7 @@ public class userCommand {
                             dos.writeUTF("Y");
                             DaemonHelper.writeLog("Allow file update within 1 min", tgtFileName);
                             //t = FilesOP.sendFile(file, socket);
-                            FilesOP.sendFile2(srcFile, socket);
+                            FilesOP.sendFile(dos, srcFile);
                             repeat = false;
                             break;
                         case "n":
@@ -112,11 +122,10 @@ public class userCommand {
                 System.out.println("No response! Update aborted!");
             }
         }
-        if (in.readUTF().equals("DONE"))
+        if (dis.readUTF().equals("DONE"))
             System.out.println("Put the file successfully!");
         else System.out.println("Update aborted!");
         DaemonHelper.writeLog("put complete", tgtFileName);
-        socket.close();
     }
 
 
@@ -285,7 +294,6 @@ public class userCommand {
         if (localGraphFile.indexOf("/") != -1) {
             String[] temp = localGraphFile.split("/");
             localGraphFile = temp[temp.length - 1];
-            System.out.println(localGraphFile);
         }
 
         // input is valid, starts to put the graph into the SDFS
@@ -293,16 +301,54 @@ public class userCommand {
         params.add(outputFile);
 
         boolean forceWrite = false;
-        while (true)
-        try {
-            sendFile("SAVA", params, file, localGraphFile, forceWrite);
-            break;
-        } catch (Exception e) {
-            forceWrite = true;
+        boolean checkpoint = false;
+
+        long tic = System.currentTimeMillis();
+        while (true) {
             try {
-                Thread.sleep(1000);
-            } catch (InterruptedException ex) {
-                // do nothing
+                Socket socket = new Socket(
+                        Daemon.master.split("#")[1], Daemon.masterPortNumber);
+                DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
+                DataInputStream dis = new DataInputStream(socket.getInputStream());
+
+                boolean retrigger = true;
+
+                if (!checkpoint) {
+                    System.out.println("Send the file...");
+                    sendFile(dos, dis, "SAVA", params, file, localGraphFile, forceWrite);
+                    checkpoint = true;
+                    retrigger = false;
+                }
+
+                // forceWrite will be true only when exception happens,
+                // which means the original master fails, need to re-trigger
+                // the new master for the graph processing task
+                if (forceWrite && retrigger) {
+                    System.out.println(forceWrite);
+                    System.out.println(checkpoint);
+                    System.out.println("re-trigger...");
+                    dos.writeUTF("SAVA RETRIGGER");
+                    dos.writeUTF(localGraphFile);
+                }
+                System.out.println("Wait for results...");
+                dis.readUTF();
+                long toc = System.currentTimeMillis();
+
+                System.out.println(
+                        "Processing time for graph computing: " + (toc - tic) / 1000. + " (sec)");
+                System.out.println("The result is stored as \"" + outputFile + "\" in the SDFS.");
+                // leave the while loop
+                break;
+
+            } catch (Exception e) {
+                if (Daemon.masterList.size() == 0) break;
+                System.out.println("Master failed, re-connecting to backup master...");
+                forceWrite = true;
+                try {
+                    Thread.sleep(2500);
+                } catch (InterruptedException ex) {
+                    // do nothing
+                }
             }
         }
     }

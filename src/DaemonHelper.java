@@ -62,6 +62,12 @@ public class DaemonHelper {
                 }
             }
             Daemon.master = master;
+            if (isMaster) {
+                if (Daemon.master.equals(Daemon.ID))
+                    System.out.println("You are the current master!");
+                else
+                    System.out.println("You are the backup master!");
+            }
 
             writeLog("JOIN!", Daemon.ID);
             updateNeighbors();

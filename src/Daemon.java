@@ -150,12 +150,12 @@ public class Daemon {
                         if (membershipList.size() == 0) {
                             ExecutorService mPool =
                                     Executors.newFixedThreadPool(
-                                            5 + ((isIntroducer)? 1: 0) + ((isMaster)? 2: 0));
+                                            5 + ((isIntroducer)? 1: 0) + ((isMaster)? 1: 0));
                             mPool.execute(new FileServer());
                             if (isMaster) mPool.execute(new Master());
                             DaemonHelper.joinGroup(isIntroducer, isMaster);
                             if (isIntroducer) mPool.execute(new IntroducerThread());
-                            if (isMaster) mPool.execute(new MasterSyncThread());
+                            // if (isMaster) mPool.execute(new MasterSyncThread());
                             mPool.execute(new GraphServer());
                             mPool.execute(new ListeningThread());
                             mPool.execute(new HeartbeatThread(100));

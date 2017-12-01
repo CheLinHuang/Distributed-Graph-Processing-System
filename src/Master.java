@@ -37,9 +37,10 @@ public class Master extends Thread {
 
     public static void clearGraphTask() {
         taskInfo.clear();
-        graph.clear();
-        partition.clear();
         iteration = 1;
         workers = "";
+        graph.clear();
+        partition.clear();
+        MasterThreadHelper.masterSynchronization();
     }
 }

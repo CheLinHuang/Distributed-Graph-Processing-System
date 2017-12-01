@@ -19,56 +19,32 @@ public class MasterThread extends Thread {
             DataInputStream clientData = new DataInputStream(socket.getInputStream());
             String operation = clientData.readUTF();
 
-            if (operation.equals("SYNC_PULL")) {
+            if (operation.equals("SYNC")) {
 
-                ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream());
-                oos.writeObject(Master.fileList);
-                oos.writeObject(Master.fileReplica);
-                oos.writeObject(Master.taskInfo);
-                oos.writeInt(Master.iteration);
-                oos.flush();
-                oos.writeUTF(Master.workers);
-                oos.flush();
-                oos.writeObject(Master.graph);
-                oos.writeObject(Master.partition);
-
-            } else if (operation.equals("SYNC_PUSH")) {
-
-                int size = clientData.readInt();
-                Map<String, long[]> tempMap = new HashMap<>();
-                for (int i = 0; i < size; i++) {
-                    String kvPair = clientData.readUTF();
-                    String key = kvPair.split("#")[0];
-                    String val = kvPair.split("#")[1];
-                    val = val.substring(1, val.length() - 1).replace(" ", "");
-                    String[] valParts = val.split(",");
-                    long[] value = new long[valParts.length];
-                    for (int j = 0; j < valParts.length; j++)
-                        value[j] = Long.parseLong(valParts[j]);
-                    tempMap.put(key, value);
-                }
-                Master.fileList = tempMap;
-                Map<String, List<String>> replicaMap  = new HashMap<>();
-                size = clientData.readInt();
-                for (int i = 0; i < size; i++) {
-                    String kvPair = clientData.readUTF();
-                    String key = kvPair.split("_")[0];
-                    String val = kvPair.split("_")[1];
-                    val = val.substring(1, val.length() - 1).replace(" ", "");
-                    String[] valParts = val.split(",");
-                    List<String> value = Arrays.asList(valParts);
-                    replicaMap.put(key, value);
-                }
-                Master.fileReplica = replicaMap;
-
-            } else if (operation.equals("SAVA SYNC")) {
                 // for backup master to sync meta data of graph processing task
                 ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream());
                 ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());
+                Master.fileList = (HashMap<String, long[]>) ois.readObject();
+                Master.fileReplica = (HashMap<String, List<String>>) ois.readObject();
                 Master.taskInfo = (List<String>) ois.readObject();
                 Master.graph = (HashMap<Integer, Vertex>) ois.readObject();
+
+                /* for debugging
+                System.out.println("Synchronization Done");
+                for (String key: Master.fileList.keySet()) {
+                    System.out.println(key + "::" + Arrays.toString(Master.fileList.get(key)));
+                    System.out.println(key + "::" + Master.fileReplica.get(key).toString());
+                }
+                System.out.println(Master.taskInfo.toString());
+                for (int key: Master.graph.keySet()) {
+                    System.out.println(key + "::" + Master.graph.get(key));
+                }
+                */
                 oos.writeUTF("DONE");
+                oos.flush();
+
             } else {
+
                 DataOutputStream clientOut = new DataOutputStream(socket.getOutputStream());
                 String sdfsfilename = clientData.readUTF();
                 String job = operation + "_" + sdfsfilename + "_" + System.currentTimeMillis();
@@ -260,7 +236,6 @@ public class MasterThread extends Thread {
                      ****************************************/
 
                     case "SAVA": {
-
                         long tic = System.currentTimeMillis();
                         for (DataOutputStream out : replicaOutputStreams) {
                             out.writeUTF("PUT REPLICA");
@@ -376,231 +351,85 @@ public class MasterThread extends Thread {
                         Master.graph = graph;
                         // graph transmission completed
 
-                        // synchronize the received graph between master and backup masters
-                        List<String> backupMasters = MasterThreadHelper.getBackupMasters();
-                        List<Socket> backupSockets = new ArrayList<>();
-                        List<ObjectOutputStream> backupOuts = new ArrayList<>();
-                        List<ObjectInputStream> backupIns = new ArrayList<>();
-                        try {
-                            for (String backupMaster : backupMasters) {
-                                Socket skt = new Socket(backupMaster.split("#")[1], Daemon.masterPortNumber);
-                                ObjectOutputStream oos = new ObjectOutputStream(skt.getOutputStream());
-                                ObjectInputStream ois = new ObjectInputStream(skt.getInputStream());
-                                backupSockets.add(skt);
-                                backupOuts.add(oos);
-                                backupIns.add(ois);
-                            }
-
-                            for (int i = 0; i < backupMasters.size(); i++) {
-                                backupOuts.get(i).writeUTF("SAVA SYNC");
-                                backupOuts.get(i).writeObject(Master.taskInfo);
-                                backupOuts.get(i).writeObject(Master.graph);
-                            }
-
-                            for (ObjectInputStream ois : backupIns) ois.readUTF();
-                        } catch (Exception e) {
-                            // e captures the case that at least one backup master failed
-                            // based on the assumption, current master will not fail
-                            // continue our graph processing task
-                        }
-                        // graph synchronization completed
-
-                        // reply to the client
-                        clientOut.writeUTF("DONE");
-
                         Master.fileList.put(sdfsfilename,
                                 new long[]{fileTimeStamp, System.currentTimeMillis()});
                         Master.fileReplica.put(sdfsfilename,
                                 targetNodes);
+
+                        // synchronize the received graph between master and backup masters
+                        MasterThreadHelper.masterSynchronization();
+
+                        // reply to the client
+                        clientOut.writeUTF("DONE");
+
                         long toc = System.currentTimeMillis();
                         System.out.println(
                                 "Processing time for graph parsing: " + (toc - tic) / 1000. + "(sec)");
 
-                        List<Socket> workerSkts = new ArrayList<>();
-                        List<ObjectOutputStream> workerOuts = new ArrayList<>();
-                        List<ObjectInputStream> workerIns = new ArrayList<>();
-                        Map<String, Integer> map = new HashMap<>();
-                        Map<Integer, String> reversedMap = new HashMap<>();
 
-                        boolean isIteration = false;
-                        int numOfIteration = -1;
-                        String terminateCondition = Master.taskInfo.get(3);
-                        if (terminateCondition.matches("\\d+")) {
-                            isIteration = true;
-                            numOfIteration = Integer.parseInt(terminateCondition);
-                        }
+                        /******************************
+                         ****** GRAPH COMPUTING *******
+                         ******************************/
 
                         tic = System.currentTimeMillis();
-                        // start to do iterations for graph computing
-                        while (true) {
 
-                            //backupMasters = MasterThreadHelper.getBackupMasters();
-                            /*****************************
-                             ****** PARTITION PHASE ******
-                             *****************************/
-                            // check the worker status and take different actions:
-                            // 0: at least one worker fails
-                            // 1: at least one worker rejoins
-                            // 2: worker list unchanged
-                            int status = MasterThreadHelper.checkWorker(Master.taskInfo.get(0));
-                            System.out.println("Status:" + status);
-                            try {
-                                // initialize the graph and do partition
-                                switch (status) {
-                                    case 0: {
-                                        // some workers fail, restart the task
-                                        long ptic = System.currentTimeMillis();
-                                        Master.iteration = 1;
-                                        workerSkts.clear();
-                                        workerOuts.clear();
-                                        workerIns.clear();
-                                        map.clear();
-                                        reversedMap.clear();
+                        MasterThreadHelper.graphComputing();
 
-                                        String[] workers = Master.workers.split("_");
-                                        for (int i = 0; i < workers.length; i++) {
-                                            String worker = workers[i];
-                                            //System.out.println(worker);
-                                            Socket skt = new Socket(worker.split("#")[1], Daemon.graphPortNumber);
-                                            workerSkts.add(skt);
-                                            workerOuts.add(new ObjectOutputStream(skt.getOutputStream()));
-                                            workerIns.add(new ObjectInputStream(skt.getInputStream()));
-                                            map.put(worker, i);
-                                            reversedMap.put(i, worker);
-                                        }
-                                        for (ObjectOutputStream out: workerOuts) {
-                                            out.writeUTF(Master.taskInfo.get(1).toUpperCase());
-                                            out.flush();
-                                            out.writeInt((isIteration? 0: 1) +
-                                                    (Master.taskInfo.get(1).equals("pagerank")? 1: 0));
-                                            out.flush();
-                                            // send the damping factor to workers
-                                            if(Master.taskInfo.get(1).equals("pagerank")) {
-                                                out.writeDouble(Double.parseDouble(Master.taskInfo.get(2)));
-                                                out.flush();
-                                            }
-                                            if(!isIteration) {
-                                                out.writeDouble(Double.parseDouble(terminateCondition));
-                                                out.flush();
-                                            }
-                                        }
-                                        for (ObjectInputStream in: workerIns) {
-                                            in.readUTF();
-                                        }
-                                        MasterThreadHelper.graphPartition(workerIns, workerOuts, map, reversedMap);
-                                        long ptoc = System.currentTimeMillis();
-                                        System.out.println(
-                                                "Processing time for graph partitioning: "
-                                                        + (ptoc - ptic) / 1000. + " (sec)");
-                                        break;
-                                    }
-                                    case 1: {
-                                        // some workers rejoin, re-partition the task
-                                        // and create new socket to new workers
-                                        long ptic = System.currentTimeMillis();
-                                        String[] workers = Master.workers.split("_");
-                                        for (int i = 0; i < workers.length; i++) {
-                                            String worker = workers[i];
-                                            if (!map.containsKey(worker)) {
-                                                Socket skt = new Socket(
-                                                        worker.split("#")[1], Daemon.graphPortNumber);
-                                                workerSkts.add(skt);
-                                                workerOuts.add(new ObjectOutputStream(skt.getOutputStream()));
-                                                workerIns.add(new ObjectInputStream(skt.getInputStream()));
-                                                map.put(worker, map.size());
-                                                reversedMap.put(reversedMap.size(), worker);
-                                            }
-                                        }
-                                        MasterThreadHelper.graphPartition(workerIns, workerOuts, map, reversedMap);
-                                        long ptoc = System.currentTimeMillis();
-                                        System.out.println(
-                                                "Processing time for graph partitioning: "
-                                                        + (ptoc - ptic) / 1000. + " (sec)");
-                                        break;
-                                    }
-                                    case 2:
-                                        // worker list unchanged, do nothing
-                                        break;
-                                }
-
-                                System.out.println("ITERATION " + Master.iteration);
-                                // partition done, start this iteration
-                                for (ObjectOutputStream out: workerOuts) {
-                                    out.writeUTF("ITERATION");
-                                    out.flush();
-                                }
-
-                                int haltCount = 0;
-                                for (ObjectInputStream in: workerIns) {
-                                    if (in.readUTF().equals("HALT"))
-                                        haltCount ++;
-                                }
-
-
-                                // if all workers vote to halt or reaches the iteration upper limit
-                                // terminate the task and store the results in the SDFS
-
-                                if ((!isIteration && haltCount == workerIns.size())
-                                        || (isIteration && Master.iteration == numOfIteration)) {
-
-                                    for (ObjectOutputStream out: workerOuts) {
-                                        out.writeUTF("TERMINATE");
-                                        out.flush();
-                                    }
-
-                                    List<String> results = new ArrayList<>();
-
-                                    for (ObjectInputStream in: workerIns) {
-                                        int size = in.readInt();
-                                        for (int i = 0; i < size; i++) {
-                                            int vertexID = in.readInt();
-                                            double vertexValue = in.readDouble();
-                                            Formatter f = new Formatter();
-                                            results.add(vertexID + "," + f.format("%.5f", vertexValue));
-                                        }
-                                    }
-                                    Collections.sort(results, new Comparator<String>() {
-                                        @Override
-                                        public int compare(String o1, String o2) {
-                                            o1 = o1.split(",")[1];
-                                            o2 = o2.split(",")[1];
-                                            return o2.compareTo(o1);
-                                        }
-                                    });
-
-                                    // save the results in the SDFS
-                                    MasterThreadHelper.saveResults(results, Master.taskInfo.get(4));
-                                    // notify client that the computation is done
-                                    Socket clientSkt = new Socket(
-                                            Master.taskInfo.get(0).split("#")[1], Daemon.filePortNumber);
-                                    DataOutputStream out = new DataOutputStream(clientSkt.getOutputStream());
-                                    out.writeUTF("SAVA");
-                                    out.writeUTF(Master.taskInfo.get(4));
-
-                                    // clear the temp file for the graph task
-                                    Master.clearGraphTask();
-                                    // leave the while loop
-                                    break;
-                                }
-                                Master.iteration ++;
-
-                            } catch (Exception e) {
-                                // e captures the case that during partition, some workers fails
-                                // since we will check worker status at the beginning of each iteration
-                                // we don't need to do any exception handling
-                                System.out.println("In exception");
-                                Master.workers = "";
-                                try {
-                                    Thread.sleep(1000);
-                                } catch (InterruptedException ie) {
-                                    // do nothing
-                                }
-                            }
-                        }
                         toc = System.currentTimeMillis();
                         System.out.println(
                                 "Processing time for graph computing: " + (toc - tic) / 1000. + "(sec)");
+                        clientOut.writeUTF("DONE");
+                        break;
 
+                    }
+                    case "SAVA RETRIGGER": {
+
+                        System.out.println("SAVA RETRIGGER");
+                        List<Socket> workerSkts = new ArrayList<>();
+                        List<ObjectOutputStream> workerOuts = new ArrayList<>();
+                        List<ObjectInputStream> workerIns = new ArrayList<>();
+
+                        // update Master.workers
+                        // since the assumption is that once master fails, the worker list will be unchanged
+                        // we can pick any worker to sync the status of the graph processing task
+
+                        MasterThreadHelper.checkWorker(Master.taskInfo.get(0));
+
+                        String[] workers = Master.workers.split("_");
+                        String worker = workers[0];
+                        int status;
+                        try {
+                            Socket skt = new Socket(worker.split("#")[1], Daemon.graphPortNumber);
+                            ObjectOutputStream dos = new ObjectOutputStream(skt.getOutputStream());
+                            ObjectInputStream dis = new ObjectInputStream(skt.getInputStream());
+                            dos.writeUTF("NEW_MASTER");
+                            dos.flush();
+
+                            // sync the status of the graph computing task
+                            // status 0: partition is not yet done
+                            // status 1: partition is done
+                            status = dis.readInt();
+
+                            switch (status) {
+                                case 0:
+                                    Master.workers = "";
+                                    break;
+                                case 1:
+                                    Master.iteration = dis.readInt() + 1;
+                                    break;
+                            }
+
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+
+                        // Synchronization done
+                        // resume the graph computing task
+
+                        MasterThreadHelper.graphComputing();
+
+                        // inform the client that the task is done
+                        clientOut.writeUTF("DONE");
                     }
                 }
                 System.out.println(Master.jobQueue.peek() + " completed!");

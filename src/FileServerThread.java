@@ -72,7 +72,7 @@ public class FileServerThread extends Thread {
                         if (response.equals("RESUME")) {
                             // Open the file in SDFS
                             File file = new File("../SDFS/" + sdfsfilename);
-                            FilesOP.sendFile2(file, socket);
+                            FilesOP.sendFile(sktOutput, file);
                             DaemonHelper.writeLog("get complete", sdfsfilename);
                         }
                     }
@@ -92,10 +92,6 @@ public class FileServerThread extends Thread {
                         sktOutput.writeUTF("FILE_FOUND");
                     else sktOutput.writeUTF("FILE_NOT_FOUND");
                     break;
-                }
-                case "SAVA": {
-                    System.out.println("Graph computing task completed!");
-                    System.out.println("The result is stored as " + sdfsfilename + " in the SDFS.");
                 }
             }
             //release the resource

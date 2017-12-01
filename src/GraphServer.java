@@ -6,7 +6,7 @@ public class GraphServer extends Thread {
 
     static HashMap<Integer, Vertex> graph;
     static HashMap<Integer, List<Double>> incoming;
-    static HashMap<Integer, String> partition;
+    static HashMap<Integer, String> partition = new HashMap<>();
     static HashMap<String, HashMap<Integer, List<Double>>> outgoing;
     static List<HashMap<Integer, List<Double>>> incomeCache;
     static int vms;

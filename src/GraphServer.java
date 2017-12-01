@@ -10,7 +10,8 @@ public class GraphServer extends Thread {
     static HashMap<String, HashMap<Integer, List<Double>>> outgoing;
     static List<HashMap<Integer, List<Double>>> incomeCache;
     static int vms;
-    static boolean iterationDone = false;
+    static int iterations = 0;
+    static boolean iterationDone = true;
     static boolean isFinish = false;
     static boolean isInitialized = false;
     static boolean needResend = false;

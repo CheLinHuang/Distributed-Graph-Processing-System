@@ -500,11 +500,22 @@ public class MasterThreadHelper {
                 }
 
                 int haltCount = 0;
+                boolean workerFailed = false;
                 for (ObjectInputStream in: workerIns) {
-                    if (in.readUTF().equals("HALT"))
-                        haltCount ++;
+                    try {
+                        String response = in.readUTF();
+                        if (response.equals("HALT"))
+                            haltCount ++;
+                    } catch (Exception e) {
+                        workerFailed = true;
+                    }
                 }
 
+                if (workerFailed) {
+                    System.out.println("At least one worker fails, restart the task");
+                    Master.workers = "";
+                    continue;
+                }
                 System.out.println("ITERATION " + Master.iteration + " DONE");
 
                 // if all workers vote to halt or reaches the iteration upper limit
@@ -556,14 +567,14 @@ public class MasterThreadHelper {
                 // e captures the case that during partition, some workers fails
                 // since we will check worker status at the beginning of each iteration
                 // we don't need to do any exception handling
-                // e.printStackTrace();
+                e.printStackTrace();
                 System.out.println("In exception");
                 Master.workers = "";
 
                 try {
                     for (Socket skt: workerSkts)
                         skt.close();
-                    Thread.sleep(1000);
+                    Thread.sleep(2500);
                 } catch (Exception ie) {
                     // do nothing
                 }

@@ -49,14 +49,16 @@ public class GraphServerThread extends Thread {
                         GraphServer.partition = new HashMap<>();
                         GraphServer.outgoing = new HashMap<>();
 
-                        System.out.println("get neighbor");
+                        //System.out.println("get neighbor");
 
                         // build partition information
                         GraphServer.partition = (HashMap<Integer, String>) in.readObject();
                         for (int i : GraphServer.partition.keySet()) {
                             String host = GraphServer.partition.get(i).split("#")[1];
                             GraphServer.partition.put(i, host);
+                            //System.out.println(i + " " + host);
                         }
+
 
                         // build outgoing list
                         for (String s : GraphServer.partition.values()) {
@@ -66,14 +68,14 @@ public class GraphServerThread extends Thread {
                         }
                         GraphServer.outgoing.remove(localHost);
                         GraphServer.vms = GraphServer.outgoing.size();
-                        System.out.println("Neighbor vms " + GraphServer.vms);
+                        //System.out.println("Neighbor vms " + GraphServer.vms);
 
                         push();
                         while (GraphServer.gatherCount != GraphServer.vms) {
-                            try {
+                            try{
                                 Thread.sleep(10);
-                            } catch (Exception e) {
-
+                            } catch (InterruptedException e) {
+                                // do nothing
                             }
                         }
 
@@ -104,7 +106,7 @@ public class GraphServerThread extends Thread {
                         GraphServer.incoming = new HashMap<>();
                         GraphServer.gatherCount = 0;
 
-                        System.out.println("# of param " + in.readInt());
+                        //System.out.println("# of param " + in.readInt());
                         GraphServer.iterationDone = true;
 
                         out.writeUTF("DONE");
@@ -123,12 +125,12 @@ public class GraphServerThread extends Thread {
                         GraphServer.gatherCount = 0;
 
                         int num = in.readInt();
-                        System.out.println("# of param " + num);
+                        //System.out.println("# of param " + num);
                         GraphServer.damping = in.readDouble();
-                        System.out.println("Get damping " + GraphServer.damping);
+                        //System.out.println("Get damping " + GraphServer.damping);
                         if (num > 1) {
                             GraphServer.threshold = in.readDouble();
-                            System.out.println("Get threshold " + GraphServer.threshold);
+                            //System.out.println("Get threshold " + GraphServer.threshold);
                         } else {
                             GraphServer.threshold = 0;
                         }
@@ -186,13 +188,14 @@ public class GraphServerThread extends Thread {
                         // gather
                         while (GraphServer.gatherCount < GraphServer.vms) {
                             try {
-                                Thread.sleep(1);
+                                Thread.sleep(10);
                             } catch (Exception e) {
 
                             }
+                            //System.out.println("line183");
                         }
 
-                        System.out.println("iteration done");
+                        //System.out.println("iteration done");
 
                         if (GraphServer.isFinish)
                             out.writeUTF("HALT");
@@ -203,7 +206,7 @@ public class GraphServerThread extends Thread {
                     }
                     case "put": {
 
-                        System.out.println("put from " + socket.getRemoteSocketAddress());
+                        //System.out.println("put from " + socket.getRemoteSocketAddress());
 
                         HashMap<Integer, List<Double>> e = (HashMap<Integer, List<Double>>) in.readObject();
                         out.writeUTF("done");
@@ -217,12 +220,13 @@ public class GraphServerThread extends Thread {
                             } catch (Exception ee) {
 
                             }
+                            //System.out.println("line204");
                         }
                         for (Map.Entry<Integer, List<Double>> entry : e.entrySet()) {
-//                            System.out.println("Inserting value" + entry.getKey());
-//                            for (double d : entry.getValue())
-//                                System.out.print(d + " ");
-//                            System.out.println();
+                            //System.out.println("Inserting value" + entry.getKey());
+                            //for (double d : entry.getValue())
+                            //   System.out.print(d + " ");
+                            //System.out.println();
                             GraphServer.incoming.get(entry.getKey()).addAll(entry.getValue());
                         }
                         GraphServer.gatherCount++;
@@ -284,6 +288,10 @@ public class GraphServerThread extends Thread {
                     } else {
                         list.add(v.value);
                     }
+                    //System.out.println("out going value " + i);
+                    //for (double d : list)
+                    //    System.out.print(d + " ");
+                    //System.out.println();
                     if (!GraphServer.outgoing.get(GraphServer.partition.get(i)).containsKey(i))
                         GraphServer.outgoing.get(GraphServer.partition.get(i)).put(i, list);
                 }
@@ -292,17 +300,18 @@ public class GraphServerThread extends Thread {
 
         int[] putCount = {0};
         for (Map.Entry<String, HashMap<Integer, List<Double>>> e : GraphServer.outgoing.entrySet()) {
-            System.out.println("Pushing " + e.getKey());
+            //System.out.println("Pushing " + e.getKey());
             Thread t = new SendGraph(e.getKey(), e.getValue(), putCount);
             t.start();
         }
 
         while (putCount[0] != GraphServer.vms) {
             try {
-                Thread.sleep(1);
+                Thread.sleep(10);
             } catch (Exception e) {
 
             }
+            //System.out.println("line287");
         }
 
         // clear outgoing info
@@ -330,6 +339,7 @@ public class GraphServerThread extends Thread {
             ) {
                 out.writeUTF("put");
                 out.flush();
+                //System.out.println("put hashmap size " + map.size());
                 out.writeObject(map);
                 in.readUTF();
 

@@ -36,11 +36,10 @@ public class FilesOP {
         return file.delete();
     }
 
-    public static void sendFile2(File file, Socket socket) throws Exception {
+    public static void sendFile(DataOutputStream socketOut, File file) throws Exception {
+
         byte[] buffer = new byte[2048];
         DataInputStream data = new DataInputStream(new BufferedInputStream(new FileInputStream(file)));
-        DataOutputStream socketOut = new DataOutputStream(socket.getOutputStream());
-
         socketOut.writeLong(file.length());
         int bytes;
         while ((bytes = data.read(buffer)) > 0)
@@ -48,6 +47,7 @@ public class FilesOP {
     }
 
 
+    /*
     // Return a thread for sending file purpose
     public static Thread sendFile(File file, Socket socket) {
         return new SendFileThread(file, socket);
@@ -90,5 +90,5 @@ public class FilesOP {
                 e.printStackTrace();
             }
         }
-    }
+    }*/
 }

@@ -232,6 +232,11 @@ public class GraphServerThread extends Thread {
 
                     }
                     case "NEW_MASTER": {
+                        if (!GraphServer.isInitialized) {
+                            out.writeInt(0);
+                            out.flush();
+                            break;
+                        }
 
                         while (!GraphServer.iterationDone) {
                             try {
@@ -241,15 +246,11 @@ public class GraphServerThread extends Thread {
                             }
                         }
 
-                        if (!GraphServer.isInitialized) {
-                            out.writeInt(0);
-                            out.flush();
-                        } else {
-                            out.writeInt(1);
-                            out.flush();
-                            out.writeInt(GraphServer.iterations);
-                            out.flush();
-                        }
+                        out.writeInt(1);
+                        out.flush();
+                        out.writeInt(GraphServer.iterations);
+                        out.flush();
+
                         break;
                     }
                 }

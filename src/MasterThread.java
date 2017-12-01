@@ -373,7 +373,7 @@ public class MasterThread extends Thread {
 
                         tic = System.currentTimeMillis();
 
-                        MasterThreadHelper.graphComputing();
+                        MasterThreadHelper.graphComputing(false);
 
                         toc = System.currentTimeMillis();
                         System.out.println(
@@ -396,6 +396,42 @@ public class MasterThread extends Thread {
                         MasterThreadHelper.checkWorker(Master.taskInfo.get(0));
 
                         String[] workers = Master.workers.split("_");
+                        try {
+                            List<Socket> skts = new ArrayList<>();
+                            List<ObjectOutputStream> oos = new ArrayList<>();
+                            List<ObjectInputStream> ois = new ArrayList<>();
+
+                            for (String worker : workers) {
+                                System.out.println(worker);
+                                Socket skt = new Socket(worker.split("#")[1], Daemon.graphPortNumber);
+                                skts.add(skt);
+                                oos.add(new ObjectOutputStream(skt.getOutputStream()));
+                                ois.add(new ObjectInputStream(skt.getInputStream()));
+                            }
+
+                            for (ObjectOutputStream out: oos) {
+                                out.writeUTF("NEW_MASTER");
+                                out.flush();
+                            }
+                            int status = 1;
+                            Master.iteration = Integer.MAX_VALUE;
+                            for (ObjectInputStream in: ois) {
+                                int temp = in.readInt();
+                                status &= temp;
+                                if (temp == 1)
+                                    Master.iteration = Math.min(in.readInt() + 1, Master.iteration);
+                            }
+                            System.out.println("Status: " + status);
+                            System.out.println("Iteration after sync: " + Master.iteration);
+                            System.out.println(Master.workers);
+
+                            if (status == 0) Master.workers = "";
+
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+
+                        /*
                         String worker = workers[0];
                         int status;
                         try {
@@ -410,6 +446,8 @@ public class MasterThread extends Thread {
                             // status 1: partition is done
                             status = dis.readInt();
 
+                            System.out.println("Status: " + status);
+                            System.out.println("Iteration before sync: " + Master.iteration);
                             switch (status) {
                                 case 0:
                                     Master.workers = "";
@@ -418,15 +456,17 @@ public class MasterThread extends Thread {
                                     Master.iteration = dis.readInt() + 1;
                                     break;
                             }
+                            System.out.println("Iteration after sync: " + Master.iteration);
+                            System.out.println(Master.workers);
 
                         } catch (Exception e) {
                             e.printStackTrace();
-                        }
+                        }*/
 
                         // Synchronization done
                         // resume the graph computing task
 
-                        MasterThreadHelper.graphComputing();
+                        MasterThreadHelper.graphComputing(true);
 
                         // inform the client that the task is done
                         clientOut.writeUTF("DONE");

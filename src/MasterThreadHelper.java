@@ -390,7 +390,7 @@ public class MasterThreadHelper {
         */
     }
 
-    public static void graphComputing() {
+    public static void graphComputing(boolean retrigger) {
 
         List<Socket> workerSkts = new ArrayList<>();
         List<ObjectOutputStream> workerOuts = new ArrayList<>();
@@ -404,6 +404,23 @@ public class MasterThreadHelper {
         if (terminateCondition.matches("\\d+")) {
             isIteration = true;
             numOfIteration = Integer.parseInt(terminateCondition);
+        }
+        if (retrigger) {
+            String[] workers = Master.workers.split("_");
+            for (int i = 0; i < workers.length; i++) {
+                String worker = workers[i];
+                System.out.println(worker);
+                try {
+                    Socket skt = new Socket(worker.split("#")[1], Daemon.graphPortNumber);
+                    workerSkts.add(skt);
+                    workerOuts.add(new ObjectOutputStream(skt.getOutputStream()));
+                    workerIns.add(new ObjectInputStream(skt.getInputStream()));
+                    map.put(worker, i);
+                    reversedMap.put(i, worker);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
         }
 
         while (true) {
@@ -454,6 +471,7 @@ public class MasterThreadHelper {
                     String[] workers = Master.workers.split("_");
                     for (int i = 0; i < workers.length; i++) {
                         String worker = workers[i];
+                        System.out.println(worker);
                         Socket skt = new Socket(worker.split("#")[1], Daemon.graphPortNumber);
                         workerSkts.add(skt);
                         workerOuts.add(new ObjectOutputStream(skt.getOutputStream()));
@@ -492,19 +510,36 @@ public class MasterThreadHelper {
                                     + (ptoc - ptic) / 1000. + " (sec)");
                 }
 
-                System.out.println("ITERATION " + Master.iteration);
+
                 // partition done, start this iteration
                 for (ObjectOutputStream out: workerOuts) {
                     out.writeUTF("ITERATION");
                     out.flush();
                 }
+                System.out.println("ITERATION " + Master.iteration);
 
                 int haltCount = 0;
+                boolean workerFailed = false;
                 for (ObjectInputStream in: workerIns) {
-                    if (in.readUTF().equals("HALT"))
-                        haltCount ++;
+                    try {
+                        String response = in.readUTF();
+                        if (response.equals("HALT"))
+                            haltCount ++;
+                    } catch (Exception e) {
+                        workerFailed = true;
+                    }
                 }
 
+                if (workerFailed) {
+                    System.out.println("At least one worker fails, restart the task");
+                    Master.workers = "";
+                    try {
+                        Thread.sleep(500);
+                    } catch (InterruptedException ie) {
+                        // do nothing
+                    }
+                    continue;
+                }
                 System.out.println("ITERATION " + Master.iteration + " DONE");
 
                 // if all workers vote to halt or reaches the iteration upper limit
@@ -563,7 +598,7 @@ public class MasterThreadHelper {
                 try {
                     for (Socket skt: workerSkts)
                         skt.close();
-                    Thread.sleep(1000);
+                    Thread.sleep(2500);
                 } catch (Exception ie) {
                     // do nothing
                 }

@@ -148,6 +148,7 @@ public class GraphServerThread extends Thread {
                     }
                     case "ITERATION": {
 
+                        GraphServer.iterations++;
                         GraphServer.iterationDone = false;
                         GraphServer.isFinish = true;
 
@@ -231,10 +232,6 @@ public class GraphServerThread extends Thread {
 
                     }
                     case "NEW_MASTER": {
-                        if (!GraphServer.isInitialized) {
-                            out.writeInt(0);
-                            break;
-                        }
 
                         while (!GraphServer.iterationDone) {
                             try {
@@ -244,9 +241,15 @@ public class GraphServerThread extends Thread {
                             }
                         }
 
-                        out.writeInt(1);
-                        out.writeInt(GraphServer.iterations);
-
+                        if (!GraphServer.isInitialized) {
+                            out.writeInt(0);
+                            out.flush();
+                        } else {
+                            out.writeInt(1);
+                            out.flush();
+                            out.writeInt(GraphServer.iterations);
+                            out.flush();
+                        }
                         break;
                     }
                 }
@@ -294,8 +297,6 @@ public class GraphServerThread extends Thread {
             Thread t = new SendGraph(e.getKey(), e.getValue(), putCount);
             t.start();
         }
-
-        System.gc();
 
         while (putCount[0] != GraphServer.vms) {
             try {

@@ -277,7 +277,7 @@ public class MasterThreadHelper {
         String task = Master.taskInfo.get(1);
         Map<Integer, List<Integer>> partition = new HashMap<>();
 
-        /*
+
         switch (task) {
             case "pagerank":
                 for (int key: Master.graph.keySet()) {
@@ -338,7 +338,7 @@ public class MasterThreadHelper {
 
         for (ObjectInputStream in: workerIns)
             in.readUTF();
-        */
+        /*
 
         switch (task) {
             case "pagerank":
@@ -387,6 +387,7 @@ public class MasterThreadHelper {
 
         for (ObjectInputStream in: workerIns)
             in.readUTF();
+        */
     }
 
     public static void graphComputing() {
@@ -555,7 +556,7 @@ public class MasterThreadHelper {
                 // e captures the case that during partition, some workers fails
                 // since we will check worker status at the beginning of each iteration
                 // we don't need to do any exception handling
-                e.printStackTrace();
+                // e.printStackTrace();
                 System.out.println("In exception");
                 Master.workers = "";
 

@@ -8,7 +8,7 @@ public class GraphServer extends Thread {
     static HashMap<Integer, List<Double>> incoming;
     static HashMap<Integer, String> partition;
     static HashMap<String, HashMap<Integer, List<Double>>> outgoing;
-    static int gatherCount = 0;
+    static List<HashMap<Integer, List<Double>>> incomeCache;
     static int vms;
     static boolean iterationDone = false;
     static boolean isFinish = false;
@@ -22,7 +22,7 @@ public class GraphServer extends Thread {
     public void run() {
         boolean listening = true;
 
-        // Keep listening for incoming file related request
+        // Keep listening for incoming graph related request
         try (ServerSocket serverSocket = new ServerSocket(Daemon.graphPortNumber)) {
 
             // Accept socket connection and create new thread

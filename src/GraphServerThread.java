@@ -2,6 +2,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -31,10 +32,7 @@ public class GraphServerThread extends Thread {
                 switch (operation) {
                     case "ADD": {
 
-                        // build local graph
-//                        Vertex v = (Vertex) in.readObject();
-//                        GraphServer.graph.put(v.ID, v);
-//                        GraphServer.incoming.put(v.ID, new ArrayList<>());
+                        long time = System.currentTimeMillis();
 
                         // build local graph in one pass
                         long num = in.readLong();
@@ -44,8 +42,10 @@ public class GraphServerThread extends Thread {
                             GraphServer.incoming.put(v.getID(), new ArrayList<>());
                             num--;
                         }
-                        break;
 
+                        System.out.println("add time " + (System.currentTimeMillis() - time));
+
+                        break;
                     }
                     case "NEIGHBOR_INFO": {
 
@@ -55,9 +55,13 @@ public class GraphServerThread extends Thread {
                         GraphServer.outgoing.clear();
 
                         System.out.println("get neighbor");
+                        long time = System.currentTimeMillis();
 
                         // build partition information
                         GraphServer.partition.putAll((HashMap<Integer, String>) in.readObject());
+
+                        System.out.println("get neighbor time " + (System.currentTimeMillis() - time));
+
                         for (int i : GraphServer.partition.keySet()) {
                             String host = GraphServer.partition.get(i).split("#")[1];
                             GraphServer.partition.put(i, host);
@@ -189,17 +193,22 @@ public class GraphServerThread extends Thread {
                     }
                     case "put": {
 
-                        long time = System.currentTimeMillis();
+                        int length = in.readInt(), len = length, bytes;
+                        ByteBuffer bb = ByteBuffer.allocate(length);
+                        byte[] buffer = new byte[GraphServer.bufferSize];
+
+                        while (length > 0 && (bytes = in.read(buffer, 0, Math.min(GraphServer.bufferSize, length))) != -1) {
+                            bb.put(buffer, 0, Math.min(GraphServer.bufferSize, bytes));
+                            length -= bytes;
+                        }
 
                         synchronized (GraphServer.incomeCache) {
-                            System.out.println("wait time for synchronized" + (System.currentTimeMillis() - time));
-                            time = System.currentTimeMillis();
-                            GraphServer.incomeCache.add((HashMap<Integer, List<Double>>) in.readObject());
-
-                            System.out.println("time for send file" + (System.currentTimeMillis() - time));
+                            GraphServer.incomeCache.add(deserializeHashMap(bb, len));
                         }
+
                         out.writeUTF("done");
                         out.flush();
+
                         return;
                     }
                     case "TERMINATE": {
@@ -269,7 +278,7 @@ public class GraphServerThread extends Thread {
 
         while (putCount[0] != GraphServer.vms) {
             try {
-                Thread.sleep(10);
+                Thread.sleep(1);
             } catch (Exception e) {
 
             }
@@ -300,8 +309,23 @@ public class GraphServerThread extends Thread {
 
                 out.writeUTF("put");
                 out.flush();
-                out.writeObject(map);
+
+                int size = 0;
+                for (Map.Entry<Integer, List<Double>> e : map.entrySet()) {
+                    size += 8 + e.getValue().size() * 8;
+                }
+
+                ByteBuffer b = serializeHashMap(map, size);
+                b.clear();
+                out.writeInt(size);
                 out.flush();
+                byte[] buffer = new byte[GraphServer.bufferSize];
+                while (size > 0) {
+                    b.get(buffer, 0, Math.min(GraphServer.bufferSize, size));
+                    out.write(buffer, 0, Math.min(GraphServer.bufferSize, size));
+                    out.flush();
+                    size -= GraphServer.bufferSize;
+                }
                 in.readUTF();
 
                 // clear outgoing info
@@ -314,5 +338,38 @@ public class GraphServerThread extends Thread {
             }
             putCount[0]++;
         }
+    }
+
+    public ByteBuffer serializeHashMap(HashMap<Integer, List<Double>> map, int size) {
+
+        ByteBuffer bb = ByteBuffer.allocate(size);
+        for (Map.Entry<Integer, List<Double>> e : map.entrySet()) {
+            bb.putInt(e.getKey());
+            bb.putInt(e.getValue().size());
+            for (double d : e.getValue())
+                bb.putDouble(d);
+        }
+        return bb;
+    }
+
+    public HashMap<Integer, List<Double>> deserializeHashMap(ByteBuffer bb, int length) {
+
+        HashMap<Integer, List<Double>> hm = new HashMap<>();
+        int index = 0;
+        bb.clear();
+        while (index < length) {
+            int id = bb.getInt();
+            int num = bb.getInt();
+            index += 8;
+            List<Double> list = new ArrayList<>(num);
+            while (num > 0) {
+                double ddd = bb.getDouble();
+                list.add(ddd);
+                index += 8;
+                num--;
+            }
+            hm.put(id, list);
+        }
+        return hm;
     }
 }

@@ -3,9 +3,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Vertex implements Serializable {
-    int ID;
+    private int ID;
     List<Integer> neighbors;
-    double value;
+    private double value;
 
     public Vertex(int ID, double value) {
         this.ID = ID;
@@ -13,17 +13,26 @@ public class Vertex implements Serializable {
         neighbors = new ArrayList<>();
     }
 
-    public void addNeighbor(int neighbor) { neighbors.add(neighbor); }
+    public void addNeighbor(int neighbor) {
+        neighbors.add(neighbor);
+    }
 
-    public int getID() { return this.ID; }
+    public int getID() {
+        return this.ID;
+    }
 
-    public void setValue(double newValue) { this.value = newValue; }
+    public void setValue(double newValue) {
+        this.value = newValue;
+    }
 
-    public double getValue() { return this.value; }
+    public double getValue() {
+        return this.value;
+    }
+
     @Override
     public String toString() {
         String output = "ID: " + this.ID + "/Value: " + this.value + "/Neighbors: ";
-        for (Integer neighbor: neighbors)
+        for (Integer neighbor : neighbors)
             output += neighbor + ", ";
         return output.substring(0, output.length() - 2);
     }

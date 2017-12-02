@@ -1,22 +1,20 @@
 import java.net.ServerSocket;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
 public class GraphServer extends Thread {
 
-    static HashMap<Integer, Vertex> graph;
-    static HashMap<Integer, List<Double>> incoming;
-    static HashMap<Integer, String> partition = new HashMap<>();
-    static HashMap<String, HashMap<Integer, List<Double>>> outgoing;
-    static List<HashMap<Integer, List<Double>>> incomeCache;
+    static final HashMap<Integer, Vertex> graph = new HashMap<>();
+    static final HashMap<Integer, List<Double>> incoming = new HashMap<>();
+    static final HashMap<Integer, String> partition = new HashMap<>();
+    static final HashMap<String, HashMap<Integer, List<Double>>> outgoing = new HashMap<>();
+    static final List<HashMap<Integer, List<Double>>> incomeCache = new ArrayList<>();
     static int vms;
-    static int iterations = 0;
+    static int iterations;
     static boolean iterationDone = true;
-    static boolean isFinish = false;
     static boolean isInitialized = false;
-    static boolean needResend = false;
-    static boolean isPageRank = false;
-    static double damping;
+    static GraphApplication graphApplication;
     static double threshold;
 
     //public static void main(String[] args) {

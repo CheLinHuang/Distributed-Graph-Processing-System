@@ -1,4 +1,4 @@
-import java.util.List;
+import java.util.Collection;
 
 public class PageRank implements GraphApplication{
 
@@ -9,7 +9,7 @@ public class PageRank implements GraphApplication{
     }
 
     @Override
-    public double apply(Vertex v, List<Double> list) {
+    public double apply(Vertex v, Collection<Double> list) {
         double pr = (1 - damping);
         for (double value : list) {
             pr += value * damping;

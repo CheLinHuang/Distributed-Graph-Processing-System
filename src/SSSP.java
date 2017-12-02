@@ -1,9 +1,9 @@
-import java.util.List;
+import java.util.Collection;
 
 public class SSSP implements GraphApplication {
 
     @Override
-    public double apply(Vertex v, List<Double> list) {
+    public double apply(Vertex v, Collection<Double> list) {
         double min = Double.MAX_VALUE;
         for (double value : list) {
             if (value < min)

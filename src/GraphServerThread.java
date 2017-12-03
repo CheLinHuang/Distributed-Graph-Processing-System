@@ -183,7 +183,10 @@ public class GraphServerThread extends Thread {
 
                         // iteration done
                         GraphServer.iterationDone = true;
-                        System.out.println("ITERATION DONE");
+                        if (!isFinish)
+                            System.out.println("ITERATION DONE " + GraphServer.iterations);
+                        else
+                            System.out.println("ITERATION HALT HALT " + GraphServer.iterations);
                         DaemonHelper.writeLog("ITERATION DONE", "");
 
                         if (isFinish)
@@ -315,6 +318,7 @@ public class GraphServerThread extends Thread {
             this.putCount = putCount;
         }
 
+        @Override
         public void run() {
 
             try (Socket socket = new Socket(target, Daemon.graphPortNumber);

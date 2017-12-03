@@ -31,7 +31,6 @@ There are 7 lines in the file: ```hostNames```, ```joinPortNumber```, ```packetP
 1. Type ```cd $ROOT/src/```
 2. Type ```java Daemon ../config/config.properties -m``` to run the master daemon process. 
 The master daemon process has extra functionality to listen to all request from client and coordinate the tasks.
-
 Note: Each machine could be both introducer and master. To do so, type ```java Daemon ../config/config.properties -i -m```
 3. Upon the prompt shows, enter "ID" to show the machine ID and enter "JOIN" to run the introducer daemon process and join the group.
 
@@ -42,17 +41,6 @@ Note: Each machine could be both introducer and master. To do so, type ```java D
 4. If there is no introducer alive, you would not able to join the group.
 
 ### Step 6 - Enter Command
-Enter "join" to join to group
-Enter "member" to show the membership list
-Enter "id" to show self's ID
-Enter "leave" to leave the group
-Enter "put localfilename sdfsfilename" to put a file in this SDFS
-Enter "get sdfsfilename localfilename" to fetch a sdfsfile to local system
-Enter "delete sdfsfilename" to delete the sdfsfile
-Enter "ls sdfsfilename" to show all the nodes which store the file
-Enter "store" to list all the sdfsfiles stored locally
-Enter "sava task(pagerank/sssp) taskparam localgraphfile outputsdfsfilename" to start the graph processing task.
-
 To run ```SSSP```, there are two ```taskparam```: ```srcNodeID``` and ```numOfIteration```.
 
 To run ```PageRank```, there are also two ```taskparam```: ```damping factor``` and ```numOfIteration / termination threshold```.

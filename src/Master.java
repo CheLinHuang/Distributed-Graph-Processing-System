@@ -14,8 +14,6 @@ public class Master extends Thread {
     static Integer iteration = 1;
     static String workers = "";
     static Map<Integer, Vertex> graph = new HashMap<>();
-    static Map<Integer, String> partition = new HashMap<>();
-
 
     public void run() {
 
@@ -40,7 +38,6 @@ public class Master extends Thread {
         iteration = 1;
         workers = "";
         graph.clear();
-        partition.clear();
         MasterThreadHelper.masterSynchronization();
     }
 }

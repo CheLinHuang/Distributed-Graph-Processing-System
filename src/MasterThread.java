@@ -1,5 +1,6 @@
 import java.io.*;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 import java.util.*;
 
 public class MasterThread extends Thread {
@@ -14,22 +15,58 @@ public class MasterThread extends Thread {
     @Override
     public void run() {
 
-        try {
+        try (DataInputStream clientData = new DataInputStream(socket.getInputStream());
+             DataOutputStream clientOut = new DataOutputStream(socket.getOutputStream())
+        ) {
 
-            DataInputStream clientData = new DataInputStream(socket.getInputStream());
             String operation = clientData.readUTF();
 
             if (operation.equals("SYNC")) {
 
                 // for backup master to sync meta data of graph processing task
-                ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream());
-                ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());
-                Master.fileList = (HashMap<String, long[]>) ois.readObject();
-                Master.fileReplica = (HashMap<String, List<String>>) ois.readObject();
-                Master.taskInfo = (List<String>) ois.readObject();
-                Master.graph = (HashMap<Integer, Vertex>) ois.readObject();
+                byte[] buffer = new byte[Daemon.bufferSize];
 
-                /* for debugging
+                int size = clientData.readInt(), bytes;
+                ByteBuffer bb = ByteBuffer.allocate(size);
+                while (size > 0 &&
+                        (bytes = clientData.read(buffer, 0, Math.min(Daemon.bufferSize, size))) != -1) {
+                    bb.put(buffer, 0, Math.min(Daemon.bufferSize, bytes));
+                    size -= bytes;
+                }
+                Serialization.deserialize(bb, (HashMap<String, long[]>)Master.fileList);
+                for (String key: Master.fileList.keySet()){
+                    System.out.println(key + "::" + Arrays.toString(Master.fileList.get(key)));
+                }
+
+
+                size = clientData.readInt();
+                bb.clear();
+                bb = ByteBuffer.allocate(size);
+                while (size > 0 &&
+                        (bytes = clientData.read(buffer, 0, Math.min(Daemon.bufferSize, size))) != -1) {
+                    bb.put(buffer, 0, Math.min(Daemon.bufferSize, bytes));
+                    size -= bytes;
+                }
+                Serialization.deserialize(bb, Master.fileReplica);
+                size = clientData.readInt();
+                bb = ByteBuffer.allocate(size);
+                while (size > 0 &&
+                        (bytes = clientData.read(buffer, 0, Math.min(Daemon.bufferSize, size))) != -1) {
+                    bb.put(buffer, 0, Math.min(Daemon.bufferSize, bytes));
+                    size -= bytes;
+                }
+                Serialization.deserialize(bb, Master.taskInfo);
+                size = clientData.readInt();
+                bb = ByteBuffer.allocate(size);
+                while (size > 0 &&
+                        (bytes = clientData.read(buffer, 0, Math.min(Daemon.bufferSize, size))) != -1) {
+                    bb.put(buffer, 0, Math.min(Daemon.bufferSize, bytes));
+                    size -= bytes;
+                }
+                Serialization.deserializeGraph(bb, Master.graph);
+
+                /*
+                // for debugging
                 System.out.println("Synchronization Done");
                 for (String key: Master.fileList.keySet()) {
                     System.out.println(key + "::" + Arrays.toString(Master.fileList.get(key)));
@@ -40,12 +77,12 @@ public class MasterThread extends Thread {
                     System.out.println(key + "::" + Master.graph.get(key));
                 }
                 */
-                oos.writeUTF("DONE");
-                oos.flush();
+                clientOut.writeUTF("DONE");
+                clientOut.flush();
 
             } else {
 
-                DataOutputStream clientOut = new DataOutputStream(socket.getOutputStream());
+
                 String sdfsfilename = clientData.readUTF();
                 String job = operation + "_" + sdfsfilename + "_" + System.currentTimeMillis();
                 System.out.println("MASTER: Got " + operation +
@@ -371,14 +408,9 @@ public class MasterThread extends Thread {
                          ****** GRAPH COMPUTING *******
                          ******************************/
 
-                        tic = System.currentTimeMillis();
-
                         MasterThreadHelper.graphComputing(false);
-
-                        toc = System.currentTimeMillis();
-                        System.out.println(
-                                "Processing time for graph computing: " + (toc - tic) / 1000. + "(sec)");
                         clientOut.writeUTF("DONE");
+
                         break;
 
                     }

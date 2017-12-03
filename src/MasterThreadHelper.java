@@ -1,6 +1,8 @@
+import javax.print.ServiceUI;
 import java.io.*;
 import java.util.*;
 import java.net.*;
+import java.nio.*;
 
 public class MasterThreadHelper {
 
@@ -106,6 +108,30 @@ public class MasterThreadHelper {
         }
     }
 
+    class SyncMaster extends Thread {
+        String target;
+
+        public SyncMaster(String target) {
+            this.target = target.split("#")[1];
+        }
+
+        @Override
+        public void run() {
+            try (Socket skt = new Socket(target, Daemon.masterPortNumber);
+                 DataOutputStream out = new DataOutputStream(skt.getOutputStream());
+                 DataInputStream in = new DataInputStream(skt.getInputStream())
+            ) {
+                out.writeUTF("SYNC");
+
+
+
+            } catch (Exception e) {
+
+            }
+
+        }
+    }
+
     public static void masterSynchronization() {
 
         // get the list of backup masters
@@ -120,28 +146,81 @@ public class MasterThreadHelper {
                 "Perform synchronization with: " + backupMasters.toString());
         long tic = System.currentTimeMillis();
         List<Socket> backupSockets = new ArrayList<>();
-        List<ObjectOutputStream> backupOuts = new ArrayList<>();
-        List<ObjectInputStream> backupIns = new ArrayList<>();
+        List<DataOutputStream> backupOuts = new ArrayList<>();
+        List<DataInputStream> backupIns = new ArrayList<>();
         try {
             for (String backupMaster : backupMasters) {
                 Socket skt = new Socket(backupMaster.split("#")[1], Daemon.masterPortNumber);
                 backupSockets.add(skt);
-                DataOutputStream dos = new DataOutputStream(skt.getOutputStream());
-                dos.writeUTF("SYNC");
-                dos.flush();
-                backupOuts.add(new ObjectOutputStream(skt.getOutputStream()));
-                backupIns.add(new ObjectInputStream(skt.getInputStream()));
+                backupOuts.add(new DataOutputStream(skt.getOutputStream()));
+                backupIns.add(new DataInputStream(skt.getInputStream()));
             }
-            for (ObjectOutputStream out: backupOuts) {
-                out.writeObject(Master.fileList);
-                out.writeObject(Master.fileReplica);
-                out.writeObject(Master.taskInfo);
-                out.writeObject(Master.graph);
+            for (DataOutputStream out: backupOuts) {
+                out.writeUTF("SYNC");
+                out.flush();
+
+                byte[] buffer = new byte[Daemon.bufferSize];
+
+                // sync fileList
+                int size = Serialization.byteCount((HashMap<String, long[]>) Master.fileList);
+                ByteBuffer bb = Serialization.serialize(
+                        (HashMap<String, long[]>) Master.fileList, size);
+                out.writeInt(size);
+                bb.clear();
+                while (size > 0) {
+
+                    int writeSize = Math.min(Daemon.bufferSize, size);
+                    bb.get(buffer, 0, writeSize);
+                    out.write(buffer, 0, writeSize);
+                    out.flush();
+                    size -= Daemon.bufferSize;
+                }
+
+                // sync fileReplica
+                size = Serialization.byteCount(Master.fileReplica);
+                bb = Serialization.serialize(Master.fileReplica, size);
+                System.out.println(size);
+                out.writeInt(size);
+                bb.clear();
+                while (size > 0) {
+                    int writeSize = Math.min(Daemon.bufferSize, size);
+                    bb.get(buffer, 0, writeSize);
+                    out.write(buffer, 0, writeSize);
+                    out.flush();
+                    size -= Daemon.bufferSize;
+                }
+
+                // sync taskInfo
+                size = Serialization.byteCount(Master.taskInfo);
+                bb = Serialization.serialize(Master.taskInfo, size);
+                out.writeInt(size);
+                bb.clear();
+                while (size > 0) {
+                    int writeSize = Math.min(Daemon.bufferSize, size);
+                    bb.get(buffer, 0, writeSize);
+                    out.write(buffer, 0, writeSize);
+                    out.flush();
+                    size -= Daemon.bufferSize;
+                }
+
+                // sync graph
+                size = Serialization.byteCountGraph(Master.graph);
+                bb = Serialization.serializeGraph(Master.graph, size);
+                out.writeInt(size);
+                bb.clear();
+                while (size > 0) {
+                    int writeSize = Math.min(Daemon.bufferSize, size);
+                    bb.get(buffer, 0, writeSize);
+                    out.write(buffer, 0, writeSize);
+                    out.flush();
+                    size -= Daemon.bufferSize;
+                }
             }
 
-            for (ObjectInputStream in : backupIns) in.readUTF();
+            for (DataInputStream in : backupIns) in.readUTF();
 
         } catch (Exception e) {
+            e.printStackTrace();
             // e captures the case that at least one backup master failed
             // based on the assumption, current master will not fail
             // continue our graph processing task
@@ -275,43 +354,42 @@ public class MasterThreadHelper {
         System.out.println("# of workers: " + workerIns.size());
 
         String task = Master.taskInfo.get(1);
-        Map<Integer, List<Integer>> partition = new HashMap<>();
 
+        List<HashMap<Integer, Vertex>> partition = new ArrayList<>();
+        Map<String, List<String>> vertexInfo = new HashMap<>();
+
+        for (int i = 0; i < numOfWorkers; i++)
+            partition.add(new HashMap<>());
 
         switch (task) {
             case "pagerank":
                 for (int key: Master.graph.keySet()) {
                     int hashValue = String.valueOf(key).hashCode() % numOfWorkers;
-                    Master.partition.put(key, reversedMap.get(hashValue));
-
-                    List<Integer> temp;
-                    if (!partition.containsKey(hashValue))
-                        temp = new ArrayList<>();
-                    else temp = partition.get(hashValue);
-
-                    temp.add(key);
-                    partition.put(hashValue, temp);
+                    List<String> list;
+                    if (!vertexInfo.containsKey(String.valueOf(key)))
+                        list = new ArrayList<>();
+                    else list = vertexInfo.get(String.valueOf(key));
+                    list.add(reversedMap.get(hashValue));
+                    vertexInfo.put(String.valueOf(key), list);
 
                     Vertex v = Master.graph.get(key);
                     if (vertexValues.size() == 0)
                         v.setValue(1);
                     else
                         v.setValue(vertexValues.get(key));
+                    partition.get(hashValue).put(key, v);
                 }
                 break;
             case "sssp":
                 int sourceNode = Integer.parseInt(Master.taskInfo.get(2));
                 for (int key: Master.graph.keySet()) {
                     int hashValue = String.valueOf(key).hashCode() % numOfWorkers;
-                    Master.partition.put(key, reversedMap.get(hashValue));
-
-                    List<Integer> temp;
-                    if (!partition.containsKey(hashValue))
-                        temp = new ArrayList<>();
-                    else temp = partition.get(hashValue);
-
-                    temp.add(key);
-                    partition.put(hashValue, temp);
+                    List<String> list;
+                    if (!vertexInfo.containsKey(String.valueOf(key)))
+                        list = new ArrayList<>();
+                    else list = vertexInfo.get(String.valueOf(key));
+                    list.add(reversedMap.get(hashValue));
+                    vertexInfo.put(String.valueOf(key), list);
 
                     Vertex v = Master.graph.get(key);
                     if (vertexValues.size() == 0) {
@@ -319,75 +397,48 @@ public class MasterThreadHelper {
                         else v.setValue(Double.MAX_VALUE);
                     } else
                         v.setValue(vertexValues.get(key));
+                    partition.get(hashValue).put(key, v);
                 }
                 break;
         }
 
         for (int i = 0; i < numOfWorkers; i++) {
             ObjectOutputStream out = workerOuts.get(i);
+            byte[] buffer = new byte[Daemon.bufferSize];
+            // send the sub-graph
+            int size = Serialization.byteCountGraph(partition.get(i));
+            ByteBuffer bb = Serialization.serializeGraph(partition.get(i), size);
             out.writeUTF("ADD");
             out.flush();
-            out.writeLong(partition.get(i).size());
+            out.writeInt(size);
             out.flush();
-            for (int vertex: partition.get(i))
-                out.writeObject(Master.graph.get(vertex));
+            bb.clear();
+            while (size > 0) {
+                int writeSize = Math.min(Daemon.bufferSize, size);
+                bb.get(buffer, 0, writeSize);
+                out.write(buffer, 0, writeSize);
+                out.flush();
+                size -= Daemon.bufferSize;
+            }
+
+            size = Serialization.byteCount(vertexInfo);
+            bb = Serialization.serialize(vertexInfo, size);
             out.writeUTF("NEIGHBOR_INFO");
             out.flush();
-            out.writeObject(Master.partition);
+            out.writeInt(size);
+            out.flush();
+            bb.clear();
+            while (size > 0) {
+                int writeSize = Math.min(Daemon.bufferSize, size);
+                bb.get(buffer, 0, writeSize);
+                out.write(buffer, 0, writeSize);
+                out.flush();
+                size -= Daemon.bufferSize;
+            }
         }
 
         for (ObjectInputStream in: workerIns)
             in.readUTF();
-        /*
-
-        switch (task) {
-            case "pagerank":
-                for (int key: Master.graph.keySet()) {
-                    int hashValue = String.valueOf(key).hashCode() % numOfWorkers;
-                    Master.partition.put(key, reversedMap.get(hashValue));
-                    Vertex v = Master.graph.get(key);
-                    if (vertexValues.size() == 0)
-                        v.setValue(1);
-                    else
-                        v.setValue(vertexValues.get(key));
-                    ObjectOutputStream out = workerOuts.get(hashValue);
-                    out.writeUTF("ADD");
-                    out.flush();
-                    out.writeObject(v);
-                }
-                for (ObjectOutputStream out: workerOuts) {
-                    out.writeUTF("NEIGHBOR_INFO");
-                    out.flush();
-                    out.writeObject(Master.partition);
-                }
-                break;
-            case "sssp":
-                int sourceNode = Integer.parseInt(Master.taskInfo.get(2));
-                for (int key: Master.graph.keySet()) {
-                    int hashValue = String.valueOf(key).hashCode() % numOfWorkers;
-                    Master.partition.put(key, reversedMap.get(hashValue));
-                    Vertex v = Master.graph.get(key);
-                    if (vertexValues.size() == 0) {
-                        if (key == sourceNode) v.setValue(0);
-                        else v.setValue(Double.MAX_VALUE);
-                    } else
-                        v.setValue(vertexValues.get(key));
-                    ObjectOutputStream out = workerOuts.get(hashValue);
-                    out.writeUTF("ADD");
-                    out.flush();
-                    out.writeObject(v);
-                }
-                for (ObjectOutputStream out: workerOuts) {
-                    out.writeUTF("NEIGHBOR_INFO");
-                    out.flush();
-                    out.writeObject(Master.partition);
-                }
-                break;
-        }
-
-        for (ObjectInputStream in: workerIns)
-            in.readUTF();
-        */
     }
 
     public static void graphComputing(boolean retrigger) {
@@ -423,6 +474,8 @@ public class MasterThreadHelper {
             }
         }
 
+        long iterationTime = 0;
+
         while (true) {
 
             /******************************
@@ -438,7 +491,9 @@ public class MasterThreadHelper {
             try {
 
                 if (status != 2) {
+
                     long ptic = System.currentTimeMillis();
+
                     if (status == 0) {
                         Master.iteration = 1;
                     }
@@ -510,7 +565,7 @@ public class MasterThreadHelper {
                                     + (ptoc - ptic) / 1000. + " (sec)");
                 }
 
-
+                long tic = System.currentTimeMillis();
                 // partition done, start this iteration
                 for (ObjectOutputStream out: workerOuts) {
                     out.writeUTF("ITERATION");
@@ -541,11 +596,16 @@ public class MasterThreadHelper {
                     continue;
                 }
                 System.out.println("ITERATION " + Master.iteration + " DONE");
+                long toc = System.currentTimeMillis();
+                iterationTime += (toc - tic);
 
                 // if all workers vote to halt or reaches the iteration upper limit
                 // terminate the task and store the results in the SDFS
                 if ((!isIteration && haltCount == workerIns.size())
                         || (isIteration && Master.iteration == numOfIteration)) {
+
+                    System.out.println("Iteration time: " + iterationTime / 1000. + " (sec)");
+
                     long dtic = System.currentTimeMillis();
                     for (ObjectOutputStream out: workerOuts) {
                         out.writeUTF("TERMINATE");
@@ -604,5 +664,6 @@ public class MasterThreadHelper {
                 }
             }
         }
+
     }
 }

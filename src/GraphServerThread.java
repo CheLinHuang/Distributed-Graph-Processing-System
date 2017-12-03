@@ -149,25 +149,27 @@ public class GraphServerThread extends Thread {
                     }
                     case "ITERATION": {
 
-                        GraphServer.iterations++;
                         GraphServer.iterationDone = false;
-                        boolean isFinish = true;
 
                         long time = System.currentTimeMillis();
 
                         // Gather
-                        for (HashMap<Integer, List<Double>> hm : GraphServer.incomeCache) {
-                            for (Map.Entry<Integer, List<Double>> e : hm.entrySet()) {
-                                GraphServer.incoming.get(e.getKey()).addAll(e.getValue());
+                        synchronized (GraphServer.incomeCache) {
+                            for (HashMap<Integer, List<Double>> hm : GraphServer.incomeCache) {
+                                for (Map.Entry<Integer, List<Double>> e : hm.entrySet()) {
+                                    GraphServer.incoming.get(e.getKey()).addAll(e.getValue());
+                                }
                             }
+                            GraphServer.incomeCache.clear();
                         }
-                        GraphServer.incomeCache.clear();
 
+                        GraphServer.iterations++;
                         System.out.println("gather time " + (System.currentTimeMillis() - time));
                         time = System.currentTimeMillis();
 
                         // Apply
 
+                        boolean isFinish = true;
                         for (Vertex v : GraphServer.graph.values()) {
                             double newValue = GraphServer.graphApplication.apply(v, GraphServer.incoming.get(v.getID()));
                             if (isFinish && Math.abs(newValue - v.getValue()) > GraphServer.threshold)

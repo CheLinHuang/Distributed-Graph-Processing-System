@@ -24,23 +24,23 @@ public class GraphServerThread extends Thread {
             while (true) {
 
                 String operation = in.readUTF();
-                System.out.println(operation);
+                DaemonHelper.writeLog(operation, "");
 
                 switch (operation) {
                     case "ADD": {
 
-                        long time = System.currentTimeMillis();
+                        // long time = System.currentTimeMillis();
 
-                        // build local graph in one pass
+                        // build local graph
                         int length = in.readInt();
 
                         Serialization.deserializeGraph(getBuffer(in, length), GraphServer.graph);
-                        
-                        for (Vertex v : GraphServer.graph.values()) {
-                            GraphServer.incoming.put(v.getID(), new ArrayList<>());
+
+                        for (int i : GraphServer.graph.keySet()) {
+                            GraphServer.incoming.put(i, new ArrayList<>());
                         }
 
-                        System.out.println("add time " + (System.currentTimeMillis() - time));
+                        // System.out.println("add time " + (System.currentTimeMillis() - time));
 
                         break;
                     }
@@ -51,8 +51,8 @@ public class GraphServerThread extends Thread {
                         GraphServer.partition.clear();
                         GraphServer.outgoing.clear();
 
-                        System.out.println("get neighbor");
-                        long time = System.currentTimeMillis();
+                        // System.out.println("get neighbor");
+                        // long time = System.currentTimeMillis();
 
                         // build partition information
                         int length = in.readInt();
@@ -60,7 +60,7 @@ public class GraphServerThread extends Thread {
                         HashMap<String, List<String>> tempPartition = new HashMap<>();
                         Serialization.deserialize(getBuffer(in, length), tempPartition);
 
-                        System.out.println("get neighbor time " + (System.currentTimeMillis() - time));
+                        // System.out.println("get neighbor time " + (System.currentTimeMillis() - time));
 
                         for (Map.Entry<String, List<String>> e : tempPartition.entrySet()) {
                             String host = e.getValue().get(0).split("#")[1];
@@ -77,7 +77,7 @@ public class GraphServerThread extends Thread {
 
                         GraphServer.outgoing.remove(localHost);
                         GraphServer.vms = GraphServer.outgoing.size();
-                        System.out.println("Neighbor vms " + GraphServer.vms);
+                        // System.out.println("Neighbor vms " + GraphServer.vms);
 
                         scatter();
                         out.writeUTF("DONE");
@@ -94,7 +94,7 @@ public class GraphServerThread extends Thread {
                             try {
                                 Thread.sleep(1);
                             } catch (Exception e) {
-
+                                // do nothing
                             }
                         }
 
@@ -107,7 +107,6 @@ public class GraphServerThread extends Thread {
                         GraphServer.incomeCache.clear();
                         GraphServer.graphApplication = new SSSP();
 
-                        System.out.println("# of param " + in.readInt());
                         out.writeUTF("DONE");
                         out.flush();
 
@@ -121,7 +120,7 @@ public class GraphServerThread extends Thread {
                             try {
                                 Thread.sleep(1);
                             } catch (Exception e) {
-
+                                // do nothing
                             }
                         }
 
@@ -133,11 +132,9 @@ public class GraphServerThread extends Thread {
                         GraphServer.incomeCache.clear();
 
                         int num = in.readInt();
-                        System.out.println("# of param " + num);
                         GraphServer.graphApplication = new PageRank(in.readDouble());
                         if (num > 1) {
                             GraphServer.threshold = in.readDouble();
-                            System.out.println("Get threshold " + GraphServer.threshold);
                         } else {
                             GraphServer.threshold = 0;
                         }
@@ -153,6 +150,7 @@ public class GraphServerThread extends Thread {
                         GraphServer.iterationDone = false;
 
                         long time = System.currentTimeMillis();
+                        DaemonHelper.writeLog("ITERATION", "");
 
                         // Gather
                         synchronized (GraphServer.incomeCache) {
@@ -169,7 +167,6 @@ public class GraphServerThread extends Thread {
                         time = System.currentTimeMillis();
 
                         // Apply
-
                         boolean isFinish = true;
                         for (Vertex v : GraphServer.graph.values()) {
                             double newValue = GraphServer.graphApplication.apply(v, GraphServer.incoming.get(v.getID()));
@@ -181,11 +178,13 @@ public class GraphServerThread extends Thread {
 
                         System.out.println("apply time " + (System.currentTimeMillis() - time));
 
+                        // Scatter
                         scatter();
 
                         // iteration done
                         GraphServer.iterationDone = true;
-                        System.out.println("iteration done");
+                        System.out.println("ITERATION DONE");
+                        DaemonHelper.writeLog("ITERATION DONE", "");
 
                         if (isFinish)
                             out.writeUTF("HALT");
@@ -196,46 +195,29 @@ public class GraphServerThread extends Thread {
                     }
                     case "put": {
 
+                        // get scatter info
                         int length = in.readInt();
 
                         ByteBuffer bb = getBuffer(in, length);
 
-                        synchronized (GraphServer.incomeCache) {
-                            GraphServer.incomeCache.add(deserializeHashMap(bb, length));
-                        }
-
                         out.writeUTF("done");
                         out.flush();
 
+                        synchronized (GraphServer.incomeCache) {
+                            GraphServer.incomeCache.add(deserializeHashMap(bb, length));
+                        }
                         return;
                     }
                     case "TERMINATE": {
 
-                        /*
-                        List<Vertex> results = new ArrayList<>();
-                        results.addAll(GraphServer.graph.values());
-                        Collections.sort(results, new Comparator<Vertex>() {
-                            @Override
-                            public int compare(Vertex o1, Vertex o2) {
-                                if (o1.getValue() > o2.getValue()) return -1;
-                                if (o1.getValue() < o2.getValue()) return 1;
-                                return 0;
-                            }
-                        });*/
-
-                        List<String> results = new ArrayList<>();
-                        for (Vertex v: GraphServer.graph.values()) {
-                            results.add(v.getID() + "," + v.getValue());
+                        // return result to maser
+                        List<String> results = new ArrayList<>(GraphServer.graph.size());
+                        List<Vertex> vertices = new ArrayList<>(GraphServer.graph.values());
+                        vertices.sort((v1, v2) -> Double.compare(v2.getValue(), v1.getValue()));
+                        for (Vertex v : vertices) {
+                            Formatter f = new Formatter();
+                            results.add(v.getID() + "," + f.format("%.5f", v.getValue()));
                         }
-
-                        Collections.sort(results, new Comparator<String>() {
-                            @Override
-                            public int compare(String o1, String o2) {
-                                Double do1 = Double.parseDouble(o1.split(",")[1]);
-                                Double do2 = Double.parseDouble(o2.split(",")[1]);
-                                return do2.compareTo(do1);
-                            }
-                        });
 
                         int length = Serialization.byteCount(results);
                         out.writeInt(length);
@@ -255,6 +237,8 @@ public class GraphServerThread extends Thread {
                         return;
                     }
                     case "NEW_MASTER": {
+
+                        // new master request info
                         if (!GraphServer.isInitialized) {
                             out.writeInt(0);
                             out.flush();
@@ -265,7 +249,7 @@ public class GraphServerThread extends Thread {
                             try {
                                 Thread.sleep(1);
                             } catch (Exception e) {
-
+                                // do nothing
                             }
                         }
 
@@ -289,11 +273,12 @@ public class GraphServerThread extends Thread {
         long time = System.currentTimeMillis();
 
         for (Vertex v : GraphServer.graph.values()) {
+            double scatterValue = GraphServer.graphApplication.scatter(v);
             for (int i : v.neighbors) {
                 if (GraphServer.incoming.containsKey(i)) {
-                    GraphServer.incoming.get(i).add(GraphServer.graphApplication.scatter(v));
+                    GraphServer.incoming.get(i).add(scatterValue);
                 } else {
-                    GraphServer.outgoing.get(GraphServer.partition.get(i)).get(i).add(GraphServer.graphApplication.scatter(v));
+                    GraphServer.outgoing.get(GraphServer.partition.get(i)).get(i).add(scatterValue);
                 }
             }
         }
@@ -311,14 +296,14 @@ public class GraphServerThread extends Thread {
             try {
                 Thread.sleep(1);
             } catch (Exception e) {
-
+                // do nothing
             }
         }
 
         System.out.println("total scatter time " + (System.currentTimeMillis() - time));
     }
 
-    class SendGraph extends Thread {
+    private class SendGraph extends Thread {
 
         String target;
         HashMap<Integer, List<Double>> map;
@@ -331,7 +316,6 @@ public class GraphServerThread extends Thread {
         }
 
         public void run() {
-            // long time = System.currentTimeMillis();
 
             try (Socket socket = new Socket(target, Daemon.graphPortNumber);
                  ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());

@@ -20,9 +20,6 @@ We also use backup master to help coordinate the graph processing task once the 
 ### Step 2 - Edit Configuration File
 There are 5 lines in the file: ```hostNames```, ```joinPortNumber```, ```packetPortNumber```, ```filePortNumber```, ```masterPortNumber```, ```graphPortNumber``` and ```logPath```. ```hostNames``` defines the introducer machines in the distributed group membership system, ```joinPortNumber``` defines which port the introducer listens to new member join request, ```packetPortNumber``` defines which port the daemon process listens to heartbeat and gossip, ```filePortNumber``` defines which port the daemon process listens to file related request, ```masterPortNumber``` defines which port the master listens to for graph processing task, ```graphPortNumber``` defines which port worker listens to for graph-processing task information, and ```logPath``` defines the path to the system log in each machine.
 
-1. Type ```cd $ROOT/config/```
-2. Type ```vim config.properties``` to edit the configuration file.
-
 ### Step 3 - Run Introducer Daemon Process
 1. Type ```cd $ROOT/src/```
 2. Type ```java Daemon ../config/config.properties -i``` to run the introducer daemon process. The introducer daemon process has extra functionality in addition to regular daemon process, which is allowing new machine to join the group.

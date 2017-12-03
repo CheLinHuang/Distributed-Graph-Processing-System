@@ -10,7 +10,6 @@ public class GraphServer extends Thread {
     static final HashMap<Integer, String> partition = new HashMap<>();
     static final HashMap<String, HashMap<Integer, List<Double>>> outgoing = new HashMap<>();
     static final List<HashMap<Integer, List<Double>>> incomeCache = new ArrayList<>();
-    static final int bufferSize = 1024;
     static int vms;
     static int iterations;
     static double threshold;
@@ -18,7 +17,6 @@ public class GraphServer extends Thread {
     static boolean isInitialized = false;
     static GraphApplication graphApplication;
 
-    //public static void main(String[] args) {
     public void run() {
         boolean listening = true;
 

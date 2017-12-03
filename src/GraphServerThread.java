@@ -3,10 +3,7 @@ import java.io.ObjectOutputStream;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class GraphServerThread extends Thread {
 
@@ -214,11 +211,37 @@ public class GraphServerThread extends Thread {
                     }
                     case "TERMINATE": {
 
-                        int length = Serialization.byteCountGraph(GraphServer.graph);
+                        /*
+                        List<Vertex> results = new ArrayList<>();
+                        results.addAll(GraphServer.graph.values());
+                        Collections.sort(results, new Comparator<Vertex>() {
+                            @Override
+                            public int compare(Vertex o1, Vertex o2) {
+                                if (o1.getValue() > o2.getValue()) return -1;
+                                if (o1.getValue() < o2.getValue()) return 1;
+                                return 0;
+                            }
+                        });*/
+
+                        List<String> results = new ArrayList<>();
+                        for (Vertex v: GraphServer.graph.values()) {
+                            results.add(v.getID() + "," + v.getValue());
+                        }
+
+                        Collections.sort(results, new Comparator<String>() {
+                            @Override
+                            public int compare(String o1, String o2) {
+                                Double do1 = Double.parseDouble(o1.split(",")[1]);
+                                Double do2 = Double.parseDouble(o2.split(",")[1]);
+                                return do2.compareTo(do1);
+                            }
+                        });
+
+                        int length = Serialization.byteCount(results);
                         out.writeInt(length);
                         out.flush();
 
-                        ByteBuffer b = Serialization.serializeGraph(GraphServer.graph, length);
+                        ByteBuffer b = Serialization.serialize(results, length);
                         b.clear();
 
                         byte[] buffer = new byte[Daemon.bufferSize];

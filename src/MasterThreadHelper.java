@@ -108,30 +108,6 @@ public class MasterThreadHelper {
         }
     }
 
-    class SyncMaster extends Thread {
-        String target;
-
-        public SyncMaster(String target) {
-            this.target = target.split("#")[1];
-        }
-
-        @Override
-        public void run() {
-            try (Socket skt = new Socket(target, Daemon.masterPortNumber);
-                 DataOutputStream out = new DataOutputStream(skt.getOutputStream());
-                 DataInputStream in = new DataInputStream(skt.getInputStream())
-            ) {
-                out.writeUTF("SYNC");
-
-
-
-            } catch (Exception e) {
-
-            }
-
-        }
-    }
-
     public static void masterSynchronization() {
 
         // get the list of backup masters
@@ -237,6 +213,8 @@ public class MasterThreadHelper {
 
     public static void saveResults(
             List<String> results, String sdfsFileName) throws Exception {
+
+        long tic = System.currentTimeMillis();
 
         List<String> outTgtNodes =
                 Hash.getTargetNode(Hash.hashing(sdfsFileName, 8));
@@ -612,33 +590,62 @@ public class MasterThreadHelper {
                         out.flush();
                     }
 
-                    List<String> results = new ArrayList<>();
+
+                    List<List<String>> subGraphs = new ArrayList<>();
+                    List<Boolean> flags = new ArrayList<>();
+                    List<Thread> threads = new ArrayList<>();
+
+                    // List<String> results = new ArrayList<>();
 
                     for (ObjectInputStream in: workerIns) {
-                        int size = in.readInt();
-                        for (int i = 0; i < size; i++) {
-                            int vertexID = in.readInt();
-                            double vertexValue = in.readDouble();
-                            Formatter f = new Formatter();
-                            results.add(vertexID + "," + f.format("%.5f", vertexValue));
-                        }
+                        Thread t = new CollectResults(subGraphs, flags, in);
+                        threads.add(t);
+                        t.start();
                     }
 
-                    Collections.sort(results, new Comparator<String>() {
+                    for (Thread t: threads)
+                        t.join();
+
+                    long tiic = System.currentTimeMillis();
+
+                    List<String> results = new ArrayList<>();
+
+                    PriorityQueue<ListIterator<String>> pq =
+                            new PriorityQueue<>(new Comparator<ListIterator<String>>() {
                         @Override
-                        public int compare(String o1, String o2) {
-                            Double do1 = Double.parseDouble(o1.split(",")[1]);
-                            Double do2 = Double.parseDouble(o2.split(",")[1]);
+                        public int compare(ListIterator<String> o1, ListIterator<String> o2) {
+                            Double do1 = Double.parseDouble(o1.next().split(",")[1]);
+                            Double do2 = Double.parseDouble(o2.next().split(",")[1]);
+                            o1.previous();
+                            o2.previous();
                             return do2.compareTo(do1);
                         }
                     });
 
-                    // save the results in the SDFS
-                    MasterThreadHelper.saveResults(results, Master.taskInfo.get(4));
+                    for (List<String> subGraph: subGraphs)
+                        pq.offer(subGraph.listIterator());
+
+                    while(!pq.isEmpty()) {
+                        ListIterator<String> iter = pq.poll();
+                        results.add(iter.next());
+                        if (iter.hasNext())
+                            pq.offer(iter);
+                    }
+                    long tooc = System.currentTimeMillis();
+                    System.out.println(
+                            "Processing time for merging the results: "
+                                    + (tooc - tiic) / 1000. + "(sec)");
+
                     long dtoc = System.currentTimeMillis();
                     System.out.println(
-                            "Processing time for saving the results: "
+                            "Processing time for collecting the results: "
                                     + (dtoc - dtic) / 1000. + "(sec)");
+                    // save the results in the SDFS
+                    MasterThreadHelper.saveResults(results, Master.taskInfo.get(4));
+                    long dtoc2 = System.currentTimeMillis();
+                    System.out.println(
+                            "Processing time for saving the results: "
+                                    + (dtoc2 - dtoc) / 1000. + "(sec)");
 
                     // clear the temp file for the graph task
                     Master.clearGraphTask();
